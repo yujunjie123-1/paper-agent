@@ -9,8 +9,10 @@ import click
 from . import __version__
 from .config import DEFAULT_OUTPUT_DIR, DRAWIO_HARNESS, PLOTNEURALNET_HARNESS
 from .io import abs_path, load_manifest, write_json, write_manifest
+from .planner import plan_workflow_manifest
 from .renderers import RENDERERS
-from .templates import blank_manifest, deep_learning_gallery_manifest
+from .templates import blank_manifest, deep_learning_gallery_manifest, reference_workflow_manifest
+from .workflow import render_workflow_manifest
 
 
 @click.group()
@@ -28,6 +30,8 @@ def catalog() -> None:
         ("drawio_architecture", "Complex block topology / multi-branch system architecture", "cli-anything-drawio + Pillow preview"),
         ("graphviz_graph", "Probabilistic graph model / computation graph / tree-net", "Graphviz dot if installed + Pillow preview"),
         ("tikz_lstm", "LSTM / gated cell / math-heavy unit structure", "TikZ source + Pillow preview"),
+        ("tikz_attention_gate", "Attention gate / math-heavy local module inset", "TikZ source + Pillow preview"),
+        ("workflow", "Multi-software staged workflow with Draw.io master assembly", "PlotNeuralNet / TikZ / Graphviz / Draw.io stages"),
     ]
     click.echo("Supported kinds:")
     for kind, desc, backend in rows:
@@ -53,6 +57,57 @@ def init(preset: str, output: str, project: str) -> None:
         payload["project"] = project
     target = write_manifest(output, payload)
     click.echo(f"Created manifest: {target}")
+
+
+@cli.group()
+def workflow() -> None:
+    """Run multi-software staged diagram workflows."""
+
+
+@workflow.command("init-reference")
+@click.option("-o", "--output", required=True, type=click.Path(), help="Absolute output workflow manifest path.")
+@click.option("--reference-1", default="", type=click.Path(), help="Original reference image for the first figure. Used as a locked Draw.io tracing underlay.")
+@click.option("--reference-2", default="", type=click.Path(), help="Original reference image for the second figure. Used as a locked Draw.io tracing underlay.")
+def workflow_init_reference(output: str, reference_1: str, reference_2: str) -> None:
+    """Create the reference-replica multi-software workflow manifest."""
+    ref1_path = abs_path(reference_1) if reference_1 else None
+    ref2_path = abs_path(reference_2) if reference_2 else None
+    if ref1_path and not ref1_path.is_file():
+        raise click.ClickException(f"Reference 1 image not found: {ref1_path}")
+    if ref2_path and not ref2_path.is_file():
+        raise click.ClickException(f"Reference 2 image not found: {ref2_path}")
+    ref1 = str(ref1_path) if ref1_path else None
+    ref2 = str(ref2_path) if ref2_path else None
+    target = write_manifest(output, reference_workflow_manifest(ref1, ref2))
+    click.echo(f"Created workflow manifest: {target}")
+
+
+@workflow.command("plan")
+@click.argument("manifest", type=click.Path(exists=True))
+@click.option("-o", "--output", default="", type=click.Path(), help="Absolute output JSON path for the tool plan.")
+@click.option("--only", "only_ids", multiple=True, help="Plan only matching workflow id. Can be repeated.")
+def workflow_plan(manifest: str, output: str, only_ids: tuple[str, ...]) -> None:
+    """Classify figure components and assign each one to the right tool before rendering."""
+    out_path = abs_path(output) if output else abs_path(manifest).with_suffix(".tool_plan.json")
+    plan = plan_workflow_manifest(manifest, out_path, only_ids=only_ids)
+    click.echo(f"Planned {len(plan['workflows'])} workflow(s). Tool plan: {out_path}")
+
+
+@workflow.command("render")
+@click.argument("manifest", type=click.Path(exists=True))
+@click.option("--out-dir", default=str(DEFAULT_OUTPUT_DIR), show_default=True, type=click.Path(), help="Absolute output directory.")
+@click.option("--only", "only_ids", multiple=True, help="Render only matching workflow id. Can be repeated.")
+@click.option(
+    "--source-format",
+    "source_formats",
+    multiple=True,
+    type=click.Choice(["drawio", "svg", "vsdx"], case_sensitive=False),
+    help="Final source format to place in deliverables. Repeat for multiple formats. PNG is always included.",
+)
+def workflow_render(manifest: str, out_dir: str, only_ids: tuple[str, ...], source_formats: tuple[str, ...]) -> None:
+    """Execute staged backends and compose a Draw.io master assembly."""
+    index = render_workflow_manifest(manifest, out_dir, only_ids, source_formats=source_formats)
+    click.echo(f"Rendered {len(index['results'])} workflow(s). Index: {index['output_dir']}\\workflow_index.json")
 
 
 @cli.command("brief")
