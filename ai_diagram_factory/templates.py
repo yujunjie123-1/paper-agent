@@ -1,0 +1,88 @@
+from __future__ import annotations
+
+
+def deep_learning_gallery_manifest() -> dict:
+    return {
+        "project": "deep_learning_gallery",
+        "description": "Starter manifest covering the visual families in the reference collage.",
+        "figures": [
+            {
+                "id": "vgg_style_cnn",
+                "kind": "plotneuralnet_cnn",
+                "title": "VGG / AlexNet Style 3D CNN",
+                "layers": [
+                    {"type": "input", "name": "Input", "shape": "224x224x3"},
+                    {"type": "conv", "name": "Conv1", "shape": "224x224x64"},
+                    {"type": "pool", "name": "MaxPool1", "shape": "112x112x64"},
+                    {"type": "conv", "name": "Conv2", "shape": "112x112x128"},
+                    {"type": "pool", "name": "MaxPool2", "shape": "56x56x128"},
+                    {"type": "dense", "name": "FC", "shape": "4096"},
+                    {"type": "softmax", "name": "Softmax", "shape": "1000"},
+                ],
+            },
+            {
+                "id": "multi_branch_architecture",
+                "kind": "drawio_architecture",
+                "title": "Multi-Branch Feature Fusion Architecture",
+                "lanes": [
+                    {"name": "Image Stream", "nodes": ["Input image", "CNN backbone", "Visual embedding"]},
+                    {"name": "Text Stream", "nodes": ["Text tokens", "Transformer", "Semantic embedding"]},
+                    {"name": "Fusion Head", "nodes": ["Concat", "Attention fusion", "Classifier"]},
+                ],
+                "edges": [
+                    ["Input image", "CNN backbone"],
+                    ["CNN backbone", "Visual embedding"],
+                    ["Text tokens", "Transformer"],
+                    ["Transformer", "Semantic embedding"],
+                    ["Visual embedding", "Concat"],
+                    ["Semantic embedding", "Concat"],
+                    ["Concat", "Attention fusion"],
+                    ["Attention fusion", "Classifier"],
+                ],
+            },
+            {
+                "id": "training_flow",
+                "kind": "drawio_flow",
+                "title": "Training Pipeline Flowchart",
+                "nodes": [
+                    {"id": "data", "label": "Dataset"},
+                    {"id": "augment", "label": "Augmentation"},
+                    {"id": "model", "label": "Model forward"},
+                    {"id": "loss", "label": "Loss"},
+                    {"id": "update", "label": "Backprop update"},
+                    {"id": "eval", "label": "Validation"},
+                ],
+                "edges": [["data", "augment"], ["augment", "model"], ["model", "loss"], ["loss", "update"], ["update", "eval"]],
+            },
+            {
+                "id": "lstm_cell",
+                "kind": "tikz_lstm",
+                "title": "LSTM Cell",
+                "inputs": ["x_t", "h_{t-1}", "c_{t-1}"],
+                "gates": ["f_t", "i_t", "o_t", "\\tilde{c}_t"],
+                "outputs": ["h_t", "c_t"],
+            },
+            {
+                "id": "probabilistic_graph",
+                "kind": "graphviz_graph",
+                "title": "Probabilistic Graph Model",
+                "layout": "layered",
+                "nodes": [
+                    {"id": "x1", "label": "X1", "rank": 0},
+                    {"id": "x2", "label": "X2", "rank": 0},
+                    {"id": "h1", "label": "H1", "rank": 1},
+                    {"id": "h2", "label": "H2", "rank": 1},
+                    {"id": "z", "label": "Z", "rank": 2},
+                    {"id": "y", "label": "Y", "rank": 3},
+                ],
+                "edges": [["x1", "h1"], ["x1", "h2"], ["x2", "h1"], ["x2", "h2"], ["h1", "z"], ["h2", "z"], ["z", "y"]],
+            },
+        ],
+    }
+
+
+def blank_manifest(project: str = "diagram_batch") -> dict:
+    payload = deep_learning_gallery_manifest()
+    payload["project"] = project
+    payload["figures"] = []
+    return payload
