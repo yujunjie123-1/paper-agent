@@ -19,6 +19,7 @@ BACKEND_TO_KIND: dict[str, str] = {
     "drawio": "drawio_architecture",
     "tikz": "tikz_lstm",
     "graphviz": "graphviz_graph",
+    "nn_svg": "nn_svg_network",
     "image_to_image": "drawio_architecture",
     "svg": "svg_module",
 }
@@ -162,6 +163,10 @@ def component_plan_to_workflow_manifest(
         "connectors": connectors,
         "labels": labels,
         "source_formats": list(SUPPORTED_SOURCE_FORMATS),
+        "line_policy": {
+            "internal": "Module renderers keep the lines they can draw natively.",
+            "drawio": "Draw.io adds only cross-module connectors, global overlays, or missing arrows.",
+        },
     }
     if reference_image:
         assembly["reference"] = {
@@ -337,6 +342,14 @@ def _default_figure_for_kind(kind: str, component: dict[str, Any]) -> dict[str, 
             "layout": "layered",
             "nodes": [{"id": _slug(name), "label": name, "rank": 0}],
             "edges": [],
+        }
+    if kind == "nn_svg_network":
+        layer_sizes = [3, 4, 2]
+        if inventory:
+            layer_sizes = [max(1, min(8, len(inventory))), max(2, min(8, len(inventory) + 1)), max(1, min(4, len(inventory) // 2 or 1))]
+        return {
+            "mode": "fcnn",
+            "layers": [{"size": size, "label": f"Layer {index + 1}"} for index, size in enumerate(layer_sizes)],
         }
     if kind == "svg_module":
         box = component.get("box_xyxy") or [0, 0, 200, 200]
@@ -517,10 +530,12 @@ def _handoff_steps(components: list[dict[str, Any]]) -> list[str]:
     if "tikz" in backends:
         steps.append("Stage B: TikZ generates math/cell insets.")
     if "graphviz" in backends:
-        steps.append("Stage C: Graphviz lays out node-link skeletons.")
+        steps.append("Stage C: Graphviz lays out node-link skeletons with Graphviz-owned edges.")
+    if "nn_svg" in backends:
+        steps.append("Stage C2: NN-SVG generates neural-network schematics with native intra-network links.")
     if "image_to_image" in backends:
         steps.append("Stage D: Image-to-image fallback for transparent raster assets that cannot be vectorized.")
-    steps.append("Stage E: Draw.io master assembly imports each asset and owns final layout, connectors, and export.")
+    steps.append("Stage E: Draw.io master assembly imports assets, owns page layout/export, and adds only cross-module or missing-arrow connectors.")
     return steps
 
 

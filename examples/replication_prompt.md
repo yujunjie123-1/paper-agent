@@ -22,6 +22,7 @@ This is the checklist I (Claude) follow when the user hands me an image or a tex
 | Module looks like... | Backend |
 |----------------------|---------|
 | A 3D convolution stack, perspective feature-map block, VGG/AlexNet/U-Net body | `plotneuralnet` |
+| A clean FCNN, LeNet-style CNN, or AlexNet-style neural-network schematic where native SVG links are enough | `nn_svg` |
 | Any flat 2D module: block, lane, branch sub-net, training flow, dense connector cluster, legend, labels | `drawio` |
 | A gated cell, attention gate, math-rich inset that needs crisp formulas | `tikz` |
 | A probabilistic graph, full-connection node mesh, computation graph, dependency tree | `graphviz` |
@@ -46,6 +47,7 @@ Use **reference-image pixel coordinates**, not normalized. The renderer scales t
 The auto-generated default per backend is intentionally minimal. For an actual replica, write the backend-specific data:
 
 - `plotneuralnet`: a `layers` array describing every Conv/Pool/Dense block with shapes.
+- `nn_svg`: `mode: "fcnn" | "lenet" | "alexnet"` plus layer sizes/labels. Keep its generated intra-network links inside the asset.
 - `drawio` (`drawio_architecture`): `lanes` array; or set `kind` to `drawio_flow` for a left-to-right pipeline with `nodes` and `edges`.
 - `tikz`: keep the canonical inputs/gates/outputs unless the inset is non-standard.
 - `graphviz`: explicit `nodes` and `edges` with `rank` for layered layouts.
@@ -53,6 +55,8 @@ The auto-generated default per backend is intentionally minimal. For an actual r
 ## Step 7 - Add `global_connectors`
 
 If two modules connect on the master (skip lines, "this maps to that" arrows, dashed guides), encode them here. Always reference module `id`s.
+
+Do not move backend-owned lines into `global_connectors`. Graphviz edges, PlotNeuralNet layer arrows, NN-SVG intra-network links, TikZ arrows, and `svg_module` local connectors should stay inside their generated module. Use Draw.io only for cross-module arrows, global overlays, or arrows that the chosen renderer cannot produce.
 
 ## Step 8 - Write the JSON, then call `replicate`
 
@@ -82,4 +86,4 @@ Before declaring the run done:
 - Assigning `drawio` to a clearly 3D feature-map stack. -> Use `plotneuralnet`.
 - Skipping `module_count_rationale`. -> Always include it.
 - Forgetting to list small but critical text like "5x5" or "Subsampling". -> Put them in `text_inventory`.
-- Drawing global connectors as part of a module's `figure_spec`. -> Lift them out into `global_connectors` so Draw.io owns the final routing.
+- Redrawing Graphviz/PlotNeuralNet/NN-SVG/TikZ internal lines in Draw.io. -> Keep backend-owned lines in the generated asset and use Draw.io only for cross-module or missing arrows.

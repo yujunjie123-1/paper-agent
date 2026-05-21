@@ -7,6 +7,7 @@ It coordinates these backends:
 - `cli-anything-plotneuralnet` for 3D CNN / stacked feature-map sources.
 - `cli-anything-drawio` for flowcharts, system architecture diagrams, and complex block topologies.
 - Graphviz `.dot` for probabilistic graph models and node-link computation graphs.
+- NN-SVG-style `.svg` for FCNN, LeNet-style CNN, and AlexNet-style neural-network schematics.
 - TikZ-style `.tex` templates for LSTM / gated cell diagrams.
 - A Python/Pillow fallback renderer so PNG previews are still produced when optional desktop exporters are unavailable.
 
@@ -43,7 +44,7 @@ What lives where:
 
 - `<out_dir>/replicate_manifest.yaml` - the workflow manifest generated from the plan.
 - `<out_dir>/tool_plan.json` - which backend handles which module and why.
-- `<out_dir>/<workflow_id>/stages/<module_id>/` - the raw per-module renderer output (PlotNeuralNet `.json`/`.tex`, Draw.io `.drawio`, Graphviz `.dot`, TikZ `.tex`, etc.).
+- `<out_dir>/<workflow_id>/stages/<module_id>/` - the raw per-module renderer output (PlotNeuralNet `.json`/`.tex`, NN-SVG `.svg`, Draw.io `.drawio`, Graphviz `.dot`, TikZ `.tex`, etc.).
 - `<out_dir>/<workflow_id>/<master>.{drawio,svg,png}` - the Draw.io master assembly.
 - `<out_dir>/<workflow_id>/<master>_trace.{drawio,svg,png}` - the master with the reference image locked as an underlay (only if `--reference` was passed).
 - `<out_dir>/<workflow_id>/deliverables/` - PNG plus `.drawio`, `.svg`, `.pdf`, and `.vsdx` (PDF/VSDX require draw.io Desktop).
@@ -62,6 +63,7 @@ See [examples/component_plan_schema.md](examples/component_plan_schema.md) for t
 Give Codex a paragraph or a reference image and ask it to create a manifest. Codex chooses the backend:
 
 - 3D CNN / VGG / AlexNet layer stacks use `plotneuralnet_cnn`.
+- FCNN, LeNet-style CNN, and AlexNet-style neural-network schematics use `nn_svg_network` when a direct SVG schematic is enough.
 - Complex flat architectures, training flows, and multi-branch systems use `drawio_architecture` or `drawio_flow`.
 - LSTM, GRU, gated cells, and formula-heavy unit diagrams use `tikz_lstm`.
 - Probabilistic graphical models, computation graphs, trees, and node-link networks use `graphviz_graph`.
@@ -74,15 +76,25 @@ C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_
 
 Use `catalog` to see supported diagram kinds and detected backends.
 
+## PlotNeuralNet vs NN-SVG
+
+They overlap on neural-network architecture drawings, but they should not be treated as the same tool:
+
+- Use PlotNeuralNet when the target has perspective 3D feature-map blocks, CNN layer stacks, U-Net/VGG/AlexNet-style slabs, or LaTeX/TikZ source requirements.
+- Use NN-SVG when the target is a clean FCNN, LeNet-style CNN, or AlexNet-style schematic and direct SVG output with native intra-network links is enough.
+- Use Draw.io only after those assets exist, mainly to place them on the final page and add cross-module or missing arrows.
+
 ## Multi-Software Workflow
 
 For figures that need more than one tool, use the staged workflow runner instead of drawing every element in one script. The workflow pattern is:
 
 - Generate specialist atomic assets with PlotNeuralNet, TikZ, Graphviz, Netron exports, or user-provided transparent image assets.
-- Send 2D layouts, flat architecture blocks, flowcharts, dense connector maps, legends, and final routing directly to Draw.io.
+- Generate FCNN, LeNet-style CNN, and AlexNet-style neural-network schematics with the NN-SVG renderer when SVG-native network links are sufficient.
+- Send only true Draw.io-owned work to Draw.io: 2D layouts, flat architecture blocks, flowcharts, legends, final page layout, cross-module connectors, and missing-arrow fixes.
 - Export code-generated atomic assets as transparent SVG whenever possible.
 - Import those assets into a Draw.io master assembly.
-- Use Draw.io for global layout, routed connectors, arrow direction, labels, legends, line jumps, and final export.
+- Preserve the internal lines produced by PlotNeuralNet, Graphviz, NN-SVG, TikZ, or SVG modules; do not redraw those lines in Draw.io.
+- Use Draw.io for global layout, asset placement, cross-module connector routing, missing arrows, labels, legends, line jumps, and final export.
 - Keep intermediate source files for traceability, but final deliverables contain only PNG plus the source formats explicitly requested by the user.
 - When code-generated assets cannot match the reference closely enough, use image-to-image generation with no background, then import that transparent asset into Draw.io as an external placement.
 - Use image-to-image only as a fallback for raster atomic components; it should not replace Draw.io for editable 2D topology or connector work.
@@ -91,10 +103,11 @@ For figures that need more than one tool, use the staged workflow runner instead
 
 Before rendering a high-fidelity replica, create a tool assignment plan. This makes the workflow explicit before any asset is generated:
 
-- 3D convolution blocks, perspective feature maps, and layer stacks are assigned to PlotNeuralNet or another 3D-capable generator.
-- 2D topology, flat modules, legends, labels, connectors, line jumps, and final alignment are assigned to Draw.io.
+- 3D convolution blocks, perspective feature maps, and layer stacks are assigned to PlotNeuralNet or another 3D-capable generator; its native layer arrows stay inside the asset.
+- FCNN, LeNet-style CNN, and AlexNet-style neural-network schematics are assigned to NN-SVG when the built-in SVG network links are sufficient.
+- 2D topology, flat modules, legends, labels, cross-module connectors, missing-arrow fixes, line jumps, and final alignment are assigned to Draw.io.
 - Math-heavy cells or local insets are assigned to TikZ.
-- Node-link graphs, probability graphs, trees, and dependency skeletons are assigned to Graphviz.
+- Node-link graphs, probability graphs, trees, and dependency skeletons are assigned to Graphviz; Graphviz-owned edges remain inside the generated asset.
 - Image-to-image is assigned only as a fallback for transparent component assets that cannot be matched with vector/code generation.
 
 Create a plan JSON from a workflow manifest:

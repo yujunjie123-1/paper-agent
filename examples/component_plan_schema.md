@@ -20,7 +20,7 @@ ai_diagram_factory.cli replicate
 | `reference_image` | string (optional) | Absolute path. Same as `--reference` on the CLI. CLI flag wins if both are set. |
 | `canvas` | `{width, height}` (optional) | Final master canvas size. Defaults to the reference image size, or 1600x900 if no reference. |
 | `components` | array, **1 to 12 items** | The semantic modules. Order matters: it becomes the hand-off order. |
-| `global_connectors` | array (optional) | Cross-module arrows added on the Draw.io master after each module is rendered. |
+| `global_connectors` | array (optional) | Cross-module arrows or missing-arrow fixes added on the Draw.io master after each module is rendered. Do not duplicate lines already produced by a module backend. |
 
 ## Per-component fields
 
@@ -28,7 +28,7 @@ ai_diagram_factory.cli replicate
 |-------|----------|---------|
 | `id` | yes | Unique slug. Reused as the stage id and the asset id. |
 | `name` | yes | Human-readable title. Becomes the placement label below the module. |
-| `backend` | yes | One of `plotneuralnet`, `drawio`, `tikz`, `graphviz`, `svg`, `image_to_image`. |
+| `backend` | yes | One of `plotneuralnet`, `nn_svg`, `drawio`, `tikz`, `graphviz`, `svg`, `image_to_image`. |
 | `description` | yes | One sentence describing what this module contains. The planner uses this in `tool_plan.json` reasoning. |
 | `box_xyxy` | image source only | `[x1, y1, x2, y2]` in **reference-image pixel coordinates**. Scaled into the canvas automatically. |
 | `text_inventory` | optional | List of every word, number, or symbol that must appear in the rendered module. Used as fallback node labels when `figure_spec` is omitted. |
@@ -41,6 +41,7 @@ ai_diagram_factory.cli replicate
 | `backend` | Renderer kind | Use it for |
 |-----------|--------------|------------|
 | `plotneuralnet` | `plotneuralnet_cnn` | One complete 3D convolutional stack, perspective feature-map block, or VGG/AlexNet/U-Net body. |
+| `nn_svg` | `nn_svg_network` | FCNN, LeNet-style CNN, or AlexNet-style neural-network schematic with native SVG links. |
 | `drawio` | `drawio_architecture` (default) or `drawio_flow` | Any 2D module: flat block, multi-branch sub-architecture, lane diagram, dense connector cluster, legend, label group, training pipeline. |
 | `tikz` | `tikz_lstm` (default) or `tikz_attention_gate` | Math-heavy unit: gated cell, attention gate, formula-rich inset that needs crisp vector typography. |
 | `graphviz` | `graphviz_graph` | Probabilistic graphical model, full-connection node network, computation graph, tree, dependency skeleton. |
@@ -54,6 +55,7 @@ Override the default kind by setting `figure_spec.kind`, e.g. `"figure_spec": {"
 When omitted, a minimal default `figure_spec` is generated automatically:
 
 - `plotneuralnet_cnn`: an input + two conv layers seeded from the component name.
+- `nn_svg_network`: a three-layer FCNN schematic with native intra-network links.
 - `drawio_architecture`: a single lane with the component name as the only node.
 - `drawio_flow`: linked nodes from `text_inventory`.
 - `tikz_lstm` / `tikz_attention_gate`: the canonical input/gate/output set.
@@ -64,6 +66,7 @@ When omitted, a minimal default `figure_spec` is generated automatically:
 Useful high-fidelity overrides:
 
 - `plotneuralnet_cnn` supports compact single-stack assets with `{"compact": true, "count": 6, "face_width_mm": 30, "face_height_mm": 30, "step_mm": 1.6, "overlays": [...]}`.
+- `nn_svg_network` supports `mode: "fcnn" | "lenet" | "alexnet"` and layer arrays such as `{"layers": [{"size": 4, "label": "Input"}, {"size": 6, "label": "Hidden"}, {"size": 2, "label": "Output"}]}` for FCNN, or CNN layers with `size`, `channels`, `maps`, and `label`.
 - `tikz_module` supports `engine: "auto" | "pdflatex" | "xelatex"` and `text_mode: "paths"` for dvisvgm path text.
 - `graphviz_graph` supports `graph_attrs`, `node_attrs`, `edge_attrs`, `rankdir`, `nodesep`, and `ranksep`.
 
@@ -79,6 +82,8 @@ For higher-fidelity replicas, write the explicit `figure_spec` yourself. It is m
 ```
 
 Connectors are drawn on the Draw.io master between the **center anchors** of the two referenced module placements. Both `from` and `to` must match a component `id` in the same plan.
+
+Line ownership rule: if Graphviz, PlotNeuralNet, NN-SVG, TikZ, or `svg_module` already draws a line inside its own asset, leave that line inside the asset. Use `global_connectors` only for cross-module arrows, page-level overlays, or arrows that the renderer cannot produce.
 
 ## Minimal example (text input, two modules)
 
@@ -124,7 +129,7 @@ Connectors are drawn on the Draw.io master between the **center anchors** of the
 
 - `components` length must be in `[1, 12]`. More than 12: merge adjacent modules first.
 - Each component must include `id`, `name`, `backend`, `description`.
-- Each `backend` must be one of the six allowed values.
+- Each `backend` must be one of the seven allowed values.
 - `id` must be unique within the plan.
 - `box_xyxy`, if present, must be `[x1, y1, x2, y2]` numeric.
 - Every `global_connector.from` and `global_connector.to` must match a component `id`.

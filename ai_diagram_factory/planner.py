@@ -11,30 +11,42 @@ TOOL_PROFILES: dict[str, dict[str, str]] = {
     "plotneuralnet": {
         "tool": "PlotNeuralNet",
         "renderer_kind": "plotneuralnet_cnn",
-        "output": "transparent SVG/PNG atomic 3D asset",
+        "output": "transparent SVG/PNG atomic 3D asset with its own layer connections",
         "source": "PlotNeuralNet Python/LaTeX project source",
-        "handoff": "Generate the 3D asset first, then import it into Draw.io for final placement.",
+        "handoff": "Generate the 3D asset, including its native arrows, then import it into Draw.io for placement.",
+        "line_ownership": "PlotNeuralNet owns internal layer connections; Draw.io only adds cross-module or missing arrows.",
     },
     "drawio": {
         "tool": "Draw.io",
         "renderer_kind": "drawio_architecture",
         "output": "editable Draw.io shapes and routed connectors",
         "source": ".drawio or requested Draw.io export format",
-        "handoff": "Create or refine directly in the Draw.io master assembly.",
+        "handoff": "Create or refine directly in Draw.io when the module itself is a 2D editable diagram.",
+        "line_ownership": "Draw.io owns this module's editable 2D connectors plus master-level cross-module connectors.",
     },
     "tikz": {
         "tool": "TikZ",
         "renderer_kind": "tikz_lstm",
-        "output": "crisp vector math/cell inset",
+        "output": "crisp vector math/cell inset with native arrows",
         "source": ".tex source",
-        "handoff": "Generate the vector inset first, then import it into Draw.io for final placement.",
+        "handoff": "Generate the vector inset, including its internal arrows, then import it into Draw.io for placement.",
+        "line_ownership": "TikZ owns internal formula/cell arrows; Draw.io only adds cross-module or missing arrows.",
     },
     "graphviz": {
         "tool": "Graphviz",
         "renderer_kind": "graphviz_graph",
-        "output": "auto-laid-out node-link SVG/PNG asset",
+        "output": "auto-laid-out node-link SVG/PNG asset with Graphviz edges",
         "source": ".dot source",
-        "handoff": "Generate the node layout first, then import it into Draw.io when it is part of the final figure.",
+        "handoff": "Generate the node layout with Graphviz-owned edges, then import it into Draw.io for placement.",
+        "line_ownership": "Graphviz owns node-link edges inside the asset; Draw.io only adds cross-module or missing arrows.",
+    },
+    "nn_svg": {
+        "tool": "NN-SVG",
+        "renderer_kind": "nn_svg_network",
+        "output": "publication-style neural network SVG with native intra-network links",
+        "source": ".svg source",
+        "handoff": "Generate FCNN, LeNet-style, or AlexNet-style SVG schematics first, then import them into Draw.io for placement.",
+        "line_ownership": "NN-SVG owns intra-network links; Draw.io only adds cross-module or missing arrows.",
     },
     "image_to_image": {
         "tool": "Image-to-image fallback",
@@ -42,6 +54,7 @@ TOOL_PROFILES: dict[str, dict[str, str]] = {
         "output": "transparent PNG/SVG-like raster component",
         "source": "prompt plus reference image and generated transparent image",
         "handoff": "Use only when vector/code generation cannot match the reference component, then import into Draw.io.",
+        "line_ownership": "The generated transparent asset owns visible internal lines; Draw.io only adds cross-module or missing arrows.",
     },
     "svg": {
         "tool": "Standalone SVG module",
@@ -49,6 +62,7 @@ TOOL_PROFILES: dict[str, dict[str, str]] = {
         "output": "self-contained editable SVG asset",
         "source": ".svg source",
         "handoff": "Generate the SVG once, then import it into the Draw.io master as a placement; Draw.io only owns cross-module connectors and global labels.",
+        "line_ownership": "The SVG module owns local connectors; Draw.io only adds cross-module or missing arrows.",
     },
 }
 
@@ -61,6 +75,7 @@ KIND_TO_ROUTE = {
     "tikz_attention_gate": "tikz",
     "tikz_module": "tikz",
     "graphviz_graph": "graphviz",
+    "nn_svg_network": "nn_svg",
     "svg_module": "svg",
 }
 
@@ -113,6 +128,20 @@ THREE_D_TOKENS = {
     "unet",
     "u-net",
     "plotneuralnet",
+}
+
+NN_SVG_TOKENS = {
+    "nn-svg",
+    "nn_svg",
+    "fcnn",
+    "fully connected",
+    "fully-connected",
+    "dense network",
+    "lenet",
+    "lenet-style",
+    "alexnet-style",
+    "publication-ready neural network",
+    "neural network schematic",
 }
 
 TIKZ_TOKENS = {
@@ -183,9 +212,10 @@ def build_manifest_plan(payload: dict[str, Any], only_ids: tuple[str, ...] = ())
         "manifest": payload.get("_manifest_path", ""),
         "project": payload.get("project", ""),
         "planning_policy": {
-            "rule": "Classify components before rendering; generate specialist assets first; assemble and route in Draw.io last.",
-            "drawio_owns": "2D topology, labels, legends, connector routing, line jumps, final alignment, and final export.",
-            "specialist_assets": "3D stacks use PlotNeuralNet; math/cell insets use TikZ; dense node-link layouts use Graphviz.",
+            "rule": "Classify components before rendering; generate specialist assets with their native internal lines first; assemble in Draw.io last.",
+            "line_ownership": "Each renderer owns the lines it can produce natively. Draw.io adds only master-level cross-module connectors or missing arrows.",
+            "drawio_owns": "Final page layout, asset placement, global labels, trace underlays, exports, and fallback cross-module/missing-arrow connectors.",
+            "specialist_assets": "3D stacks use PlotNeuralNet; FCNN/LeNet/AlexNet-style SVG schematics use NN-SVG; math/cell insets use TikZ; dense node-link layouts use Graphviz.",
             "fallback": "Image-to-image is allowed only for transparent component assets when vector generation cannot match the reference.",
         },
         "workflows": planned_workflows,
@@ -208,6 +238,7 @@ def build_workflow_plan(workflow: dict[str, Any]) -> dict[str, Any]:
         "components": planned_components,
         "summary": {
             "plotneuralnet_assets": counts.get("plotneuralnet", 0),
+            "nn_svg_assets": counts.get("nn_svg", 0),
             "drawio_tasks": counts.get("drawio", 0),
             "tikz_assets": counts.get("tikz", 0),
             "graphviz_assets": counts.get("graphviz", 0),
@@ -216,8 +247,9 @@ def build_workflow_plan(workflow: dict[str, Any]) -> dict[str, Any]:
         "handoff_order": _handoff_order(planned_components),
         "quality_gate": [
             "Do not render the full figure as one hard-coded SVG when multiple tools are assigned.",
-            "All connector-heavy or label-heavy work must remain editable in Draw.io.",
-            "Compare every generated 3D asset against the reference before final Draw.io assembly.",
+            "Do not redraw Graphviz, PlotNeuralNet, NN-SVG, TikZ, or SVG-module internal lines in Draw.io when the renderer already produced them.",
+            "Use Draw.io connectors only for cross-module relationships, global overlays, or arrows missing from the generated asset.",
+            "Compare every generated asset against the reference before final Draw.io assembly.",
             "If the vector asset remains visibly off after tuning, replace only that component with a transparent image-to-image asset.",
         ],
     }
@@ -236,6 +268,7 @@ def classify_component(component: dict[str, Any]) -> dict[str, Any]:
         "output": profile["output"],
         "editable_source": profile["source"],
         "handoff": profile["handoff"],
+        "line_ownership": profile["line_ownership"],
         "confidence": confidence,
         "reason": reason,
         "final_assembly": "Draw.io",
@@ -266,6 +299,8 @@ def _choose_route(component: dict[str, Any]) -> tuple[str, str, str]:
         return "plotneuralnet", "high", "The declared component features identify a 3D feature-map asset."
     if _contains_any(text, IMAGE_TO_IMAGE_TOKENS):
         return "image_to_image", "medium", "The component is marked as a transparent raster fallback."
+    if _contains_any(text, NN_SVG_TOKENS):
+        return "nn_svg", "high", "The component is a publication-style neural network schematic suited to NN-SVG."
     if _contains_any(text, THREE_D_TOKENS) and not _contains_any(text, {"master", "assembly", "connector", "connectors", "routing", "line jump", "line jumps"}):
         return "plotneuralnet", "high", "The component is a 3D convolutional or feature-map stack."
     if _contains_any(text, DRAWIO_TOKENS):
@@ -315,9 +350,9 @@ def _infer_components(workflow: dict[str, Any]) -> list[dict[str, Any]]:
         components.append(
             {
                 "id": "routed_connectors",
-                "name": "Final routed connectors",
+                "name": "Master-level fallback connectors",
                 "source": "assembly",
-                "description": "Arrow direction, line routing, line jumps, and connector cleanup.",
+                "description": "Cross-module arrows, missing-arrow overlays, line jumps, and connector cleanup not owned by a specialist renderer.",
             }
         )
     components.append(
@@ -335,16 +370,18 @@ def _handoff_order(components: list[dict[str, Any]]) -> list[str]:
     active = {component["assignment"]["route"] for component in components}
     order = []
     if "plotneuralnet" in active:
-        order.append("1. Generate and tune PlotNeuralNet 3D assets as transparent SVG/PNG components.")
+        order.append("1. Generate and tune PlotNeuralNet 3D assets, preserving native internal arrows.")
+    if "nn_svg" in active:
+        order.append("2. Generate NN-SVG neural-network schematics, preserving native intra-network links.")
     if "tikz" in active:
-        order.append("2. Generate TikZ math/cell insets as vector assets.")
+        order.append("3. Generate TikZ math/cell insets as vector assets with internal arrows.")
     if "graphviz" in active:
-        order.append("3. Generate Graphviz node-link or dependency skeleton assets when needed.")
+        order.append("4. Generate Graphviz node-link or dependency skeleton assets with Graphviz-owned edges.")
     if "image_to_image" in active:
-        order.append("4. Generate transparent image-to-image fallback components only for shapes that cannot be matched as vectors.")
-    order.append("5. Import all specialist assets into the Draw.io master canvas.")
-    order.append("6. Build 2D modules, labels, legends, connector routing, line jumps, and final alignment in Draw.io.")
-    order.append("7. Export PNG plus only the source format requested by the user.")
+        order.append("5. Generate transparent image-to-image fallback components only for shapes that cannot be matched as vectors.")
+    order.append("6. Import all specialist assets into the Draw.io master canvas.")
+    order.append("7. Use Draw.io for page layout, global labels, cross-module connectors, and missing-arrow fixes only.")
+    order.append("8. Export PNG plus only the source format requested by the user.")
     return order
 
 

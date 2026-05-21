@@ -30,9 +30,10 @@ def catalog() -> None:
         ("drawio_flow", "Algorithm flowchart / training pipeline", "cli-anything-drawio + Pillow preview"),
         ("drawio_architecture", "Complex block topology / multi-branch system architecture", "cli-anything-drawio + Pillow preview"),
         ("graphviz_graph", "Probabilistic graph model / computation graph / tree-net", "Graphviz dot if installed + Pillow preview"),
+        ("nn_svg_network", "FCNN / LeNet-style / AlexNet-style neural network SVG schematic", "Python NN-SVG-style renderer + CairoSVG preview"),
         ("tikz_lstm", "LSTM / gated cell / math-heavy unit structure", "TikZ source + Pillow preview"),
         ("tikz_attention_gate", "Attention gate / math-heavy local module inset", "TikZ source + Pillow preview"),
-        ("workflow", "Multi-software staged workflow with Draw.io master assembly", "PlotNeuralNet / TikZ / Graphviz / Draw.io stages"),
+        ("workflow", "Multi-software staged workflow with Draw.io master assembly", "PlotNeuralNet / NN-SVG / TikZ / Graphviz / Draw.io stages"),
     ]
     click.echo("Supported kinds:")
     for kind, desc, backend in rows:
@@ -124,6 +125,8 @@ def brief(text: str, image_path: str, output: str) -> None:
         payload["reference_image"] = str(abs_path(image_path))
     if any(token in lower for token in ["cnn", "vgg", "alexnet", "卷积", "3d"]):
         payload["figures"].append(deep_learning_gallery_manifest()["figures"][0])
+    if any(token in lower for token in ["nn-svg", "fcnn", "fully connected", "lenet", "neural network schematic"]):
+        payload["figures"].append(deep_learning_gallery_manifest()["figures"][5])
     if any(token in lower for token in ["flow", "流程", "pipeline", "训练"]):
         payload["figures"].append(deep_learning_gallery_manifest()["figures"][2])
     if any(token in lower for token in ["architecture", "架构", "系统", "branch", "fusion"]):

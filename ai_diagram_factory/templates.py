@@ -77,6 +77,17 @@ def deep_learning_gallery_manifest() -> dict:
                 ],
                 "edges": [["x1", "h1"], ["x1", "h2"], ["x2", "h1"], ["x2", "h2"], ["h1", "z"], ["h2", "z"], ["z", "y"]],
             },
+            {
+                "id": "nn_svg_fcnn",
+                "kind": "nn_svg_network",
+                "title": "NN-SVG Fully Connected Network",
+                "mode": "fcnn",
+                "layers": [
+                    {"size": 4, "label": "Input"},
+                    {"size": 6, "label": "Hidden"},
+                    {"size": 3, "label": "Output"},
+                ],
+            },
         ],
     }
 
@@ -91,7 +102,7 @@ def blank_manifest(project: str = "diagram_batch") -> dict:
 def reference_workflow_manifest(reference_1: str | None = None, reference_2: str | None = None) -> dict:
     return {
         "project": "reference_multisoftware_replica_workflow",
-        "description": "Staged workflow: specialist tools create assets, then Draw.io master assembly controls layout, routing, labels, and final export.",
+        "description": "Staged workflow: specialist tools create assets with native internal lines, then Draw.io master assembly controls page layout, cross-module routing, labels, and final export.",
         "workflows": [
             _reference_1_workflow(reference_1),
             _reference_2_workflow(reference_2),
@@ -104,7 +115,7 @@ def _reference_1_workflow(reference_image: str | None = None) -> dict:
         "id": "reference_1_unet_3d_master",
         "title": "",
         "canvas": {"width": 1600, "height": 900},
-        "notes": "Draw.io master owns the final composition; PlotNeuralNet and Graphviz assets remain in stages for traceability and refinement.",
+        "notes": "Draw.io master owns the final composition and only page-level connector fixes; PlotNeuralNet and Graphviz assets keep their native internal lines in stages for traceability.",
         "placements": [
         ],
         "shapes": _reference_1_shapes(),
@@ -121,7 +132,7 @@ def _reference_1_workflow(reference_image: str | None = None) -> dict:
         "workflow": [
             "Stage 1: PlotNeuralNet creates a controlled 3D CNN backbone asset.",
             "Stage 2: Graphviz records the encoder-decoder dependency skeleton.",
-            "Stage 3: Draw.io master assembly imports assets, then owns long skip routes, labels, and final composition.",
+            "Stage 3: Draw.io master assembly imports assets, then owns long cross-module skip routes, labels, and final composition.",
         ],
         "stages": [
             {
@@ -177,7 +188,7 @@ def _reference_2_workflow(reference_image: str | None = None) -> dict:
         "id": "reference_2_cswf_attention_unet_master",
         "title": "",
         "canvas": {"width": 1400, "height": 980},
-        "notes": "Draw.io master owns the dense topology and routed links. TikZ attention inset is imported as a staged asset.",
+        "notes": "Draw.io master owns the dense page topology and routed cross-module links. TikZ attention inset is imported with its native internal arrows preserved.",
         "placements": [
             {"asset": "ref2_attention_gate_tikz", "x": 660, "y": 48, "width": 600, "height": 230, "opacity": 0.98},
         ],
@@ -190,13 +201,13 @@ def _reference_2_workflow(reference_image: str | None = None) -> dict:
     return {
         "id": "reference_2_cswf_attention_unet_multisoftware",
         "title": "Reference 2 CSWF Attention U-Net Replica Workflow",
-        "objective": "Use Draw.io for the dense block topology, TikZ for the attention-gate inset, PlotNeuralNet for small 3D feature blocks, and Draw.io master assembly for routed red/blue/black connections.",
+        "objective": "Use Draw.io for the dense block topology and cross-module red/blue/black connections, TikZ for the attention-gate inset, and PlotNeuralNet for small 3D feature blocks.",
         "planning": _reference_2_planning(),
         "workflow": [
             "Stage 1: TikZ creates the attention gate inset with math-style labels.",
             "Stage 2: PlotNeuralNet creates the 3D CSWF feature-map language used inside modules.",
             "Stage 3: Graphviz records the information-flow skeleton.",
-            "Stage 4: Draw.io master assembly imports the inset/assets, then owns orthogonal routing, legend, and final layout.",
+            "Stage 4: Draw.io master assembly imports the inset/assets, then owns page-level orthogonal routing, legend, and final layout.",
         ],
         "stages": [
             {
@@ -250,7 +261,7 @@ def _reference_2_workflow(reference_image: str | None = None) -> dict:
 
 def _reference_1_planning() -> dict:
     return {
-        "strategy": "Classify the figure before rendering: 3D feature slabs are specialist assets; skip routes, labels, and final alignment stay in Draw.io.",
+        "strategy": "Classify the figure before rendering: 3D feature slabs are specialist assets with native internal arrows; cross-module skip routes, labels, and final alignment stay in Draw.io.",
         "components": [
             {
                 "id": "ref1_reference_trace",
@@ -268,12 +279,12 @@ def _reference_1_planning() -> dict:
                 "id": "ref1_skip_connection_skeleton",
                 "name": "encoder-decoder dependency skeleton",
                 "kind": "graphviz_graph",
-                "description": "Optional dependency skeleton for skip routes before the Draw.io connector pass.",
+                "description": "Optional dependency skeleton with Graphviz-owned edges, used before the Draw.io cross-module connector pass.",
             },
             {
                 "id": "ref1_long_skip_routes",
                 "name": "long teal skip routes and arrow directions",
-                "description": "Connector-heavy long routes with clear arrow direction, no broken line segments, and final line-jump cleanup.",
+                "description": "Cross-module long routes with clear arrow direction, no broken line segments, and final line-jump cleanup.",
                 "features": ["drawio", "connectors", "routing", "arrow", "line jumps"],
             },
             {
@@ -285,7 +296,7 @@ def _reference_1_planning() -> dict:
             {
                 "id": "ref1_master_canvas",
                 "name": "final Draw.io assembly",
-                "description": "Import generated 3D assets, then assemble, align, route, and export from Draw.io.",
+                "description": "Import generated assets, then assemble, align, add cross-module or missing-arrow routes, and export from Draw.io.",
                 "features": ["drawio", "master", "assembly", "final export"],
             },
         ],
@@ -294,7 +305,7 @@ def _reference_1_planning() -> dict:
 
 def _reference_2_planning() -> dict:
     return {
-        "strategy": "Separate 2D topology from specialist assets: the dense network body and connectors are Draw.io tasks; only the inset and 3D module language are generated upstream.",
+        "strategy": "Separate 2D topology from specialist assets: page-level routes and flat topology are Draw.io tasks; TikZ, Graphviz, and PlotNeuralNet keep their own internal lines.",
         "components": [
             {
                 "id": "ref2_reference_trace",
@@ -317,7 +328,7 @@ def _reference_2_planning() -> dict:
             {
                 "id": "ref2_routed_arrows",
                 "name": "red, blue, black, and cyan routed arrows",
-                "description": "Final connector routing, arrowheads, line jumps, and crossing cleanup must be done in Draw.io.",
+                "description": "Final cross-module connector routing, missing arrowheads, line jumps, and crossing cleanup must be done in Draw.io.",
                 "features": ["drawio", "connectors", "routing", "arrow", "line jumps"],
             },
             {
@@ -341,7 +352,7 @@ def _reference_2_planning() -> dict:
             {
                 "id": "ref2_master_canvas",
                 "name": "final Draw.io assembly",
-                "description": "Import specialist assets, then build editable topology, align all labels, route connectors, and export final files.",
+                "description": "Import specialist assets, then build editable topology, align all labels, route cross-module or missing connectors, and export final files.",
                 "features": ["drawio", "master", "assembly", "final export"],
             },
         ],

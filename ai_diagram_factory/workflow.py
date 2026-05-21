@@ -565,7 +565,7 @@ def _build_assembly_drawio(
         '<mxCell id="reference_layer" value="Reference underlay" parent="0"/>',
         '<mxCell id="asset_layer" value="Generated assets" parent="0"/>',
         '<mxCell id="shape_layer" value="Editable assembly shapes" parent="0"/>',
-        '<mxCell id="connector_layer" value="Editable routed connectors" parent="0"/>',
+        '<mxCell id="connector_layer" value="Master cross-module and missing-arrow connectors" parent="0"/>',
         '<mxCell id="label_layer" value="Labels" parent="0"/>',
     ]
     next_id = 2

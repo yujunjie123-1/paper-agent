@@ -8,7 +8,9 @@ from click.testing import CliRunner
 
 from ai_diagram_factory.cli import cli
 from ai_diagram_factory.io import write_manifest, write_json
+from ai_diagram_factory.planner import build_manifest_plan
 from ai_diagram_factory.replicate import MODULE_LIMIT
+from ai_diagram_factory.renderers.nn_svg import render_nn_svg_network
 from ai_diagram_factory.renderers.tikz import render_tikz_module
 from ai_diagram_factory.templates import reference_workflow_manifest
 
@@ -63,6 +65,54 @@ def test_render_drawio_flow_manifest(tmp_path: Path) -> None:
     assert (out_dir / "smoke_flow" / "smoke_flow.png").is_file()
     index = json.loads((out_dir / "index.json").read_text(encoding="utf-8"))
     assert index["results"][0]["id"] == "smoke_flow"
+
+
+def test_nn_svg_renderer_owns_internal_links(tmp_path: Path) -> None:
+    result = render_nn_svg_network(
+        {
+            "id": "tiny_nn_svg",
+            "kind": "nn_svg_network",
+            "title": "Tiny FCNN",
+            "mode": "fcnn",
+            "layers": [{"size": 2, "label": "Input"}, {"size": 3, "label": "Hidden"}, {"size": 1, "label": "Output"}],
+        },
+        tmp_path,
+    )
+
+    svg_path = Path(result["svg"])
+    assert svg_path.is_file()
+    assert Path(result["png"]).is_file()
+    svg = svg_path.read_text(encoding="utf-8")
+    assert "<line" in svg
+    assert result["backend"]["line_ownership"] == "internal links are owned by nn_svg_network"
+
+
+def test_planner_routes_publication_nn_schematic_to_nn_svg() -> None:
+    plan = build_manifest_plan(
+        {
+            "project": "routing",
+            "workflows": [
+                {
+                    "id": "routing_demo",
+                    "planning": {
+                        "components": [
+                            {
+                                "id": "fcnn",
+                                "name": "Fully connected neural network schematic",
+                                "description": "Publication-ready FCNN with dense network links.",
+                            }
+                        ]
+                    },
+                    "stages": [],
+                    "assembly": {},
+                }
+            ],
+        }
+    )
+
+    assignment = plan["workflows"][0]["components"][0]["assignment"]
+    assert assignment["route"] == "nn_svg"
+    assert "Draw.io only adds cross-module" in assignment["line_ownership"]
 
 
 def test_workflow_plan_writes_expected_summary(tmp_path: Path) -> None:
