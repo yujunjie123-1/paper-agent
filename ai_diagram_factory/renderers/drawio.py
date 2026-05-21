@@ -115,6 +115,8 @@ def _write_drawio_source(path: Path, title: str, nodes: list[dict[str, Any]], ed
 
 
 def _try_drawio_export(drawio_path: Path, png_path: Path) -> dict[str, Any]:
+    if os.environ.get("AI_DIAGRAM_FACTORY_SKIP_EXTERNAL_EXPORTS") == "1":
+        return {"status": "fallback", "reason": "disabled by AI_DIAGRAM_FACTORY_SKIP_EXTERNAL_EXPORTS"}
     env = os.environ.copy()
     env["PYTHONPATH"] = str(DRAWIO_HARNESS)
     cmd = ["cli-anything-drawio", "--project", str(drawio_path), "export", "render", str(png_path), "--format", "png", "--overwrite"]

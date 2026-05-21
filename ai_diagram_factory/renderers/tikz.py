@@ -1,153 +1,204 @@
 from __future__ import annotations
 
 from pathlib import Path
-import shutil
-import subprocess
-import tempfile
 from typing import Any
 
 from ..canvas import draw_arrow, draw_centered_text, draw_round_rect, load_font, new_canvas, save_png
+from ..latex_utils import compile_tikz_body_to_svg
 from ..styles import PALETTE
 
 
 def render_tikz_lstm(figure: dict[str, Any], out_dir: Path) -> dict[str, Any]:
     fig_dir = out_dir / figure["id"]
     fig_dir.mkdir(parents=True, exist_ok=True)
-    tex_path = fig_dir / f"{figure['id']}.tex"
     png_path = fig_dir / f"{figure['id']}.png"
-    tex_path.write_text(_build_lstm_tex(figure), encoding="utf-8")
-    latex_backend = _try_pdflatex(tex_path)
-    _render_lstm_png(figure, png_path)
-    sources = [str(tex_path)]
-    pdf_path = tex_path.with_suffix(".pdf")
-    if pdf_path.exists():
-        sources.append(str(pdf_path))
-    return {"id": figure["id"], "kind": "tikz_lstm", "png": str(png_path), "sources": sources, "backend": latex_backend}
+    body = _lstm_body(figure)
+    latex_result = compile_tikz_body_to_svg(body, fig_dir, figure["id"])
+    sources = [latex_result["tex"]]
+    if latex_result.get("pdf"):
+        sources.append(latex_result["pdf"])
+    if latex_result.get("svg"):
+        sources.append(latex_result["svg"])
+        _rasterize_svg_to_png(latex_result["svg"], png_path)
+    else:
+        _render_lstm_png(figure, png_path)
+    if not png_path.exists():
+        _render_lstm_png(figure, png_path)
+    result: dict[str, Any] = {
+        "id": figure["id"],
+        "kind": "tikz_lstm",
+        "png": str(png_path),
+        "sources": sources,
+        "backend": _latex_backend_status(latex_result),
+    }
+    if latex_result.get("svg"):
+        result["svg"] = latex_result["svg"]
+    return result
 
 
 def render_tikz_attention_gate(figure: dict[str, Any], out_dir: Path) -> dict[str, Any]:
     fig_dir = out_dir / figure["id"]
     fig_dir.mkdir(parents=True, exist_ok=True)
-    tex_path = fig_dir / f"{figure['id']}.tex"
     png_path = fig_dir / f"{figure['id']}.png"
-    tex_path.write_text(_build_attention_gate_tex(figure), encoding="utf-8")
-    latex_backend = _try_pdflatex(tex_path)
-    _render_attention_gate_png(figure, png_path)
-    sources = [str(tex_path)]
-    pdf_path = tex_path.with_suffix(".pdf")
-    if pdf_path.exists():
-        sources.append(str(pdf_path))
-    return {"id": figure["id"], "kind": "tikz_attention_gate", "png": str(png_path), "sources": sources, "backend": latex_backend}
+    body = _attention_gate_body(figure)
+    latex_result = compile_tikz_body_to_svg(body, fig_dir, figure["id"])
+    sources = [latex_result["tex"]]
+    if latex_result.get("pdf"):
+        sources.append(latex_result["pdf"])
+    if latex_result.get("svg"):
+        sources.append(latex_result["svg"])
+        _rasterize_svg_to_png(latex_result["svg"], png_path)
+    else:
+        _render_attention_gate_png(figure, png_path)
+    if not png_path.exists():
+        _render_attention_gate_png(figure, png_path)
+    result: dict[str, Any] = {
+        "id": figure["id"],
+        "kind": "tikz_attention_gate",
+        "png": str(png_path),
+        "sources": sources,
+        "backend": _latex_backend_status(latex_result),
+    }
+    if latex_result.get("svg"):
+        result["svg"] = latex_result["svg"]
+    return result
 
 
-def _try_pdflatex(tex_path: Path) -> dict[str, Any]:
-    pdflatex = shutil.which("pdflatex") or _known_pdflatex_path()
-    if not pdflatex:
-        return {"status": "pillow_preview", "reason": "pdflatex executable not found"}
-    ascii_root = Path("C:/Users/86180/Documents/ai_diagram_factory_latex_tmp")
-    ascii_root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="tikz_", dir=str(ascii_root)) as tmp:
-        tmp_dir = Path(tmp)
-        tmp_tex = tmp_dir / tex_path.name
-        shutil.copy2(tex_path, tmp_tex)
-        result = _run_pdflatex(pdflatex, tmp_tex)
-        tmp_pdf = tmp_tex.with_suffix(".pdf")
-        if result.returncode == 0 and tmp_pdf.exists():
-            final_pdf = tex_path.with_suffix(".pdf")
-            shutil.copy2(tmp_pdf, final_pdf)
-            return {"status": "pdflatex", "pdf": str(final_pdf)}
-        return {"status": "pillow_preview", "returncode": result.returncode, "stderr": result.stderr[-2000:], "stdout": result.stdout[-2000:]}
+def render_tikz_module(figure: dict[str, Any], out_dir: Path) -> dict[str, Any]:
+    """Generic TikZ module renderer.
+
+    The figure must provide a ``body`` field containing a complete
+    ``\\begin{tikzpicture}...\\end{tikzpicture}`` block. Optional fields:
+    ``libraries`` (list of TikZ library names), ``packages`` (list of extra
+    LaTeX packages), ``preamble`` (raw LaTeX before \\begin{document}),
+    ``border_pt`` (standalone border in pt).
+    """
+    fig_dir = out_dir / figure["id"]
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    png_path = fig_dir / f"{figure['id']}.png"
+    body = figure.get("body") or _placeholder_body(figure)
+    latex_result = compile_tikz_body_to_svg(
+        body,
+        fig_dir,
+        figure["id"],
+        libraries=figure.get("libraries"),
+        extra_packages=figure.get("packages"),
+        preamble=figure.get("preamble", ""),
+        border_pt=int(figure.get("border_pt", 2)),
+        engine=figure.get("engine", "auto"),
+        text_mode=figure.get("text_mode", "paths"),
+    )
+    sources = [latex_result["tex"]]
+    if latex_result.get("pdf"):
+        sources.append(latex_result["pdf"])
+    if latex_result.get("svg"):
+        sources.append(latex_result["svg"])
+        _rasterize_svg_to_png(latex_result["svg"], png_path)
+    if not png_path.exists():
+        _render_module_fallback_png(figure, png_path)
+    result: dict[str, Any] = {
+        "id": figure["id"],
+        "kind": "tikz_module",
+        "png": str(png_path),
+        "sources": sources,
+        "backend": _latex_backend_status(latex_result),
+    }
+    if latex_result.get("svg"):
+        result["svg"] = latex_result["svg"]
+    return result
 
 
-def _run_pdflatex(pdflatex: str, tex_path: Path) -> subprocess.CompletedProcess[str]:
+def _latex_backend_status(latex_result: dict[str, Any]) -> dict[str, Any]:
+    pdf_status = latex_result.get("pdf_status", {}).get("status")
+    svg_status = latex_result.get("svg_status", {}).get("status")
+    engine = latex_result.get("engine", "auto")
+    if pdf_status == "ok" and svg_status == "ok":
+        return {"status": "tikz_svg", "engine": engine}
+    if pdf_status == "ok":
+        return {"status": "latex_pdf_only", "engine": engine, "svg_status": svg_status}
+    return {"status": "pillow_preview", "engine": engine, "pdf_status": pdf_status}
+
+
+def _rasterize_svg_to_png(svg_path: str, png_path: Path) -> None:
     try:
-        return subprocess.run(
-            [pdflatex, "-interaction=nonstopmode", "-halt-on-error", str(tex_path.name)],
-            cwd=str(tex_path.parent),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired as exc:
-        return subprocess.CompletedProcess(exc.cmd, 124, stdout=exc.stdout or "", stderr=str(exc))
+        import cairosvg
+
+        cairosvg.svg2png(url=svg_path, write_to=str(png_path))
+    except Exception as exc:
+        png_path.with_suffix(".render-error.txt").write_text(str(exc), encoding="utf-8")
 
 
-def _known_pdflatex_path() -> str | None:
-    candidates = [
-        Path("C:/Users/86180/AppData/Local/Programs/MiKTeX/miktex/bin/x64/pdflatex.exe"),
-        Path("C:/Program Files/MiKTeX/miktex/bin/x64/pdflatex.exe"),
-    ]
-    for candidate in candidates:
-        if candidate.is_file():
-            return str(candidate)
-    return None
+def _placeholder_body(figure: dict[str, Any]) -> str:
+    title = figure.get("title", figure.get("id", ""))
+    return (
+        "\\begin{tikzpicture}[>=Stealth]\n"
+        f"  \\node[draw, rounded corners, fill=cyan!8, minimum width=4cm, minimum height=2cm] (n) {{{title}}};\n"
+        "\\end{tikzpicture}\n"
+    )
 
 
-def _build_lstm_tex(figure: dict[str, Any]) -> str:
+def _lstm_body(figure: dict[str, Any]) -> str:
     title = figure.get("title", "LSTM Cell")
-    return rf"""\documentclass{{article}}
-\usepackage[margin=0.3in]{{geometry}}
-\usepackage{{tikz}}
-\pagestyle{{empty}}
-\usetikzlibrary{{positioning,arrows.meta,calc}}
-\begin{{document}}
-\begin{{center}}
-\begin{{tikzpicture}}[>=Stealth, node distance=1.2cm, every node/.style={{font=\small}}]
-\node[draw, rounded corners, fill=cyan!8, minimum width=10cm, minimum height=4.6cm] (cell) {{{title}}};
-\node[draw, circle, fill=white] (mul1) at (-3,0.8) {{$\times$}};
-\node[draw, circle, fill=white] (add) at (-1,0.8) {{$+$}};
-\node[draw, circle, fill=white] (mul2) at (1.2,0.8) {{$\times$}};
-\node[draw, rounded corners, fill=red!12] (f) at (-3,-0.8) {{$f_t$}};
-\node[draw, rounded corners, fill=red!12] (i) at (-1.5,-0.8) {{$i_t$}};
-\node[draw, rounded corners, fill=red!12] (c) at (0,-0.8) {{$\tilde{{c}}_t$}};
-\node[draw, rounded corners, fill=red!12] (o) at (1.5,-0.8) {{$o_t$}};
-\draw[->] (-5,0.8) -- (mul1);
-\draw[->] (mul1) -- (add);
-\draw[->] (add) -- (mul2);
-\draw[->] (mul2) -- (5,0.8);
-\draw[->] (-4,-2.2) -- (f);
-\draw[->] (-4,-2.2) -- (i);
-\draw[->] (-4,-2.2) -- (c);
-\draw[->] (-4,-2.2) -- (o);
-\draw[->] (f) -- (mul1);
-\draw[->] (i) -- (add);
-\draw[->] (c) -- (add);
-\draw[->] (o) -- (mul2);
-\end{{tikzpicture}}
-\end{{center}}
-\end{{document}}
-"""
+    return (
+        "\\begin{tikzpicture}[>=Stealth, every node/.style={font=\\small}]\n"
+        f"  \\node[draw, rounded corners, fill=cyan!8, minimum width=10cm, minimum height=4.6cm] (cell) {{{title}}};\n"
+        "  \\node[draw, circle, fill=white] (mul1) at (-3,0.8) {$\\times$};\n"
+        "  \\node[draw, circle, fill=white] (add) at (-1,0.8) {$+$};\n"
+        "  \\node[draw, circle, fill=white] (mul2) at (1.2,0.8) {$\\times$};\n"
+        "  \\node[draw, rounded corners, fill=red!12] (f) at (-3,-0.8) {$f_t$};\n"
+        "  \\node[draw, rounded corners, fill=red!12] (i) at (-1.5,-0.8) {$i_t$};\n"
+        "  \\node[draw, rounded corners, fill=red!12] (c) at (0,-0.8) {$\\tilde{c}_t$};\n"
+        "  \\node[draw, rounded corners, fill=red!12] (o) at (1.5,-0.8) {$o_t$};\n"
+        "  \\draw[->] (-5,0.8) -- (mul1);\n"
+        "  \\draw[->] (mul1) -- (add);\n"
+        "  \\draw[->] (add) -- (mul2);\n"
+        "  \\draw[->] (mul2) -- (5,0.8);\n"
+        "  \\draw[->] (-4,-2.2) -- (f);\n"
+        "  \\draw[->] (-4,-2.2) -- (i);\n"
+        "  \\draw[->] (-4,-2.2) -- (c);\n"
+        "  \\draw[->] (-4,-2.2) -- (o);\n"
+        "  \\draw[->] (f) -- (mul1);\n"
+        "  \\draw[->] (i) -- (add);\n"
+        "  \\draw[->] (c) -- (add);\n"
+        "  \\draw[->] (o) -- (mul2);\n"
+        "\\end{tikzpicture}\n"
+    )
 
 
-def _build_attention_gate_tex(figure: dict[str, Any]) -> str:
+def _attention_gate_body(figure: dict[str, Any]) -> str:
     title = figure.get("title", "Attention Gate")
-    return rf"""\documentclass{{article}}
-\usepackage[margin=0.2in]{{geometry}}
-\usepackage{{tikz}}
-\pagestyle{{empty}}
-\usetikzlibrary{{positioning,arrows.meta,calc}}
-\begin{{document}}
-\begin{{center}}
-\begin{{tikzpicture}}[>=Stealth, node distance=0.9cm, every node/.style={{font=\small}}]
-\node[draw, dashed, rounded corners, fill=cyan!4, minimum width=3.0cm, minimum height=4.6cm] (x) at (0,0) {{$N\times H\times W\times C$}};
-\node[draw, rounded corners, fill=cyan!18, minimum width=1.2cm, minimum height=0.8cm] (conv) at (3.0,0.8) {{$1\times1$ conv}};
-\node[draw, dashed, rounded corners, fill=violet!5, minimum width=1.3cm, minimum height=2.4cm] (a) at (5.2,0.2) {{$H\times W\times1\times N$}};
-\node[draw, rounded corners, fill=blue!18, minimum width=1.4cm, minimum height=0.8cm] (ca) at (7.3,1.2) {{channel}};
-\node[draw, rounded corners, fill=blue!18, minimum width=1.4cm, minimum height=0.8cm] (sa) at (7.3,-0.7) {{spatial}};
-\node[draw, circle, fill=white] (mul) at (9.0,0.2) {{$\otimes$}};
-\node[draw, rounded corners, fill=red!12, minimum width=1.4cm, minimum height=0.9cm] (out) at (10.8,0.2) {{$H\times W\times C$}};
-\draw[->] (x) -- node[above] {{conv}} (conv);
-\draw[->] (conv) -- node[above] {{concat}} (a);
-\draw[->] (a) -- (ca);
-\draw[->] (a) -- (sa);
-\draw[->] (ca) -| (mul);
-\draw[->] (sa) -| (mul);
-\draw[->] (mul) -- (out);
-\node at (5.4,2.5) {{{title}}};
-\end{{tikzpicture}}
-\end{{center}}
-\end{{document}}
-"""
+    return (
+        "\\begin{tikzpicture}[>=Stealth, every node/.style={font=\\small}]\n"
+        "  \\node[draw, dashed, rounded corners, fill=cyan!4, minimum width=3.0cm, minimum height=4.6cm] (x) at (0,0) {$N\\times H\\times W\\times C$};\n"
+        "  \\node[draw, rounded corners, fill=cyan!18, minimum width=1.2cm, minimum height=0.8cm] (conv) at (3.0,0.8) {$1\\times1$ conv};\n"
+        "  \\node[draw, dashed, rounded corners, fill=violet!5, minimum width=1.3cm, minimum height=2.4cm] (a) at (5.2,0.2) {$H\\times W\\times1\\times N$};\n"
+        "  \\node[draw, rounded corners, fill=blue!18, minimum width=1.4cm, minimum height=0.8cm] (ca) at (7.3,1.2) {channel};\n"
+        "  \\node[draw, rounded corners, fill=blue!18, minimum width=1.4cm, minimum height=0.8cm] (sa) at (7.3,-0.7) {spatial};\n"
+        "  \\node[draw, circle, fill=white] (mul) at (9.0,0.2) {$\\otimes$};\n"
+        "  \\node[draw, rounded corners, fill=red!12, minimum width=1.4cm, minimum height=0.9cm] (out) at (10.8,0.2) {$H\\times W\\times C$};\n"
+        "  \\draw[->] (x) -- node[above] {conv} (conv);\n"
+        "  \\draw[->] (conv) -- node[above] {concat} (a);\n"
+        "  \\draw[->] (a) -- (ca);\n"
+        "  \\draw[->] (a) -- (sa);\n"
+        "  \\draw[->] (ca) -| (mul);\n"
+        "  \\draw[->] (sa) -| (mul);\n"
+        "  \\draw[->] (mul) -- (out);\n"
+        f"  \\node at (5.4,2.5) {{{title}}};\n"
+        "\\end{tikzpicture}\n"
+    )
+
+
+def _render_module_fallback_png(figure: dict[str, Any], png_path: Path) -> None:
+    width, height = 600, 320
+    img, draw = new_canvas(width, height, "#FFFFFF")
+    title_font = load_font(22, bold=True)
+    body_font = load_font(16)
+    draw.text((30, 24), figure.get("title", figure.get("id", "TikZ module")), font=title_font, fill=PALETTE["ink"])
+    box = (40, 90, width - 40, height - 40)
+    draw_round_rect(draw, box, "#EFFBFF", "#638A9C", width=3, radius=18)
+    description = figure.get("description", "TikZ source available; LaTeX/dvisvgm not run.")
+    draw_centered_text(draw, box, description[:120], body_font, max_chars=18)
+    save_png(img, png_path)
 
 
 def _render_lstm_png(figure: dict[str, Any], png_path: Path) -> None:

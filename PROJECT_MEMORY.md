@@ -21,6 +21,16 @@ Build a Codex-friendly diagram production pipeline that can turn user-provided t
 - Added an example manifest at `E:\多软件协作\ai-diagram-factory\examples\gallery.yaml`.
 - Generated local sample outputs under `E:\多软件协作\ai-diagram-factory\outputs`.
 
+## Default Entry Point
+
+`replicate` is the default one-command entry point. The user gives Claude an image or a text description; Claude writes a `component_plan.json` (see `examples/component_plan_schema.md` and `examples/replication_prompt.md`) with at most 12 semantic modules and an explicit `backend` per module, then runs:
+
+```powershell
+python -m ai_diagram_factory.cli replicate --plan ABS_PLAN.json --reference ABS_IMAGE.png --out-dir ABS_OUT
+```
+
+Deliverables under `<out_dir>/<workflow_id>/deliverables/` always include PNG plus `.drawio`, `.svg`, and `.vsdx` (vsdx degrades gracefully when draw.io Desktop is missing). Module-by-module assets and `tool_plan.json` live alongside for audit and partial regeneration.
+
 ## Tool Roles
 
 - `plotneuralnet_cnn`: Use this for 3D CNN / VGG / AlexNet style layer stacks with perspective blocks, feature-map sizes, and channel-depth labels. Output includes PNG preview plus PlotNeuralNet source files.
@@ -82,9 +92,9 @@ cli-anything-drawio --project ABSOLUTE_DRAWIO_PATH export render ABSOLUTE_OUTPUT
 
 1. The user provides a paragraph, paper figure description, or reference image.
 2. Codex first creates or reviews a tool assignment plan that decides which visual components go to PlotNeuralNet, Draw.io, TikZ, Graphviz, or image-to-image fallback.
-3. Codex writes or edits a YAML/JSON manifest using absolute paths.
-4. `ai-diagram-factory` writes `tool_plan.json` before rendering and then renders the manifest.
-5. The user receives PNG files plus editable source files for later refinement.
+3. Codex writes a `component_plan.json` per `examples/component_plan_schema.md` (at most 12 semantic modules, each with an explicit `backend`). For a free-text input, leave `box_xyxy` off and rely on the grid placement.
+4. Run `python -m ai_diagram_factory.cli replicate --plan ABS_PLAN.json [--reference ABS_IMAGE.png] --out-dir ABS_OUT`. The CLI writes `tool_plan.json` and the workflow manifest before rendering, then renders every module and assembles the Draw.io master.
+5. The user receives PNG plus `.drawio`, `.svg`, and `.vsdx` source files in `<out_dir>/<workflow_id>/deliverables/`. Module-level intermediates remain under `stages/` for partial regeneration.
 
 Planning command:
 

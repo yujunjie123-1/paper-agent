@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -109,6 +110,7 @@ def _render_master_assembly(
     svg_path = workflow_dir / f"{name}.svg"
     drawio_path = workflow_dir / f"{name}.drawio"
     png_path = workflow_dir / f"{name}.png"
+    pdf_path = workflow_dir / f"{name}.pdf"
     vsdx_path = workflow_dir / f"{name}.vsdx"
     requested_formats = _requested_source_formats(assembly, source_formats)
 
@@ -119,14 +121,19 @@ def _render_master_assembly(
         _build_assembly_drawio(workflow, assembly, stage_results, width, height, include_reference=False),
         encoding="utf-8",
     )
-    vsdx_export = _try_export_vsdx(drawio_path, vsdx_path) if "vsdx" in requested_formats else {"status": "not_requested"}
+    pdf_export = _try_export_drawio(drawio_path, pdf_path, "pdf") if "pdf" in requested_formats else {"status": "not_requested"}
+    if "pdf" in requested_formats and pdf_export.get("status") != "exported":
+        pdf_export = _write_pdf(svg_text, pdf_path, fallback_from=pdf_export)
+    vsdx_export = _try_export_drawio(drawio_path, vsdx_path, "vsdx") if "vsdx" in requested_formats else {"status": "not_requested"}
     result = {
         "id": name,
         "tool": "drawio_master_assembly",
         "svg": str(svg_path),
         "drawio": str(drawio_path),
         "png": str(png_path),
+        "pdf": str(pdf_path) if pdf_path.exists() else None,
         "vsdx": str(vsdx_path) if vsdx_path.exists() else None,
+        "pdf_export": pdf_export,
         "vsdx_export": vsdx_export,
         "requested_source_formats": requested_formats,
         "notes": assembly.get("notes", ""),
@@ -135,6 +142,7 @@ def _render_master_assembly(
         trace_svg_path = workflow_dir / f"{name}_trace.svg"
         trace_drawio_path = workflow_dir / f"{name}_trace.drawio"
         trace_png_path = workflow_dir / f"{name}_trace.png"
+        trace_pdf_path = workflow_dir / f"{name}_trace.pdf"
         trace_vsdx_path = workflow_dir / f"{name}_trace.vsdx"
         trace_svg_text = _build_assembly_svg(workflow, assembly, stage_results, width, height, include_reference=True)
         trace_svg_path.write_text(trace_svg_text, encoding="utf-8")
@@ -143,12 +151,17 @@ def _render_master_assembly(
             _build_assembly_drawio(workflow, assembly, stage_results, width, height, include_reference=True),
             encoding="utf-8",
         )
-        trace_vsdx_export = _try_export_vsdx(trace_drawio_path, trace_vsdx_path) if "vsdx" in requested_formats else {"status": "not_requested"}
+        trace_pdf_export = _try_export_drawio(trace_drawio_path, trace_pdf_path, "pdf") if "pdf" in requested_formats else {"status": "not_requested"}
+        if "pdf" in requested_formats and trace_pdf_export.get("status") != "exported":
+            trace_pdf_export = _write_pdf(trace_svg_text, trace_pdf_path, fallback_from=trace_pdf_export)
+        trace_vsdx_export = _try_export_drawio(trace_drawio_path, trace_vsdx_path, "vsdx") if "vsdx" in requested_formats else {"status": "not_requested"}
         result["trace"] = {
             "svg": str(trace_svg_path),
             "drawio": str(trace_drawio_path),
             "png": str(trace_png_path),
+            "pdf": str(trace_pdf_path) if trace_pdf_path.exists() else None,
             "vsdx": str(trace_vsdx_path) if trace_vsdx_path.exists() else None,
+            "pdf_export": trace_pdf_export,
             "vsdx_export": trace_vsdx_export,
             "reference": str(_reference_path(assembly)),
         }
@@ -159,6 +172,7 @@ def _render_master_assembly(
         {
             "drawio": drawio_path,
             "svg": svg_path,
+            "pdf": pdf_path if pdf_path.exists() else None,
             "vsdx": vsdx_path if vsdx_path.exists() else None,
         },
         requested_formats,
@@ -603,7 +617,11 @@ def _build_assembly_drawio(
         end = points[-1]
         mx_points = "".join(f'<mxPoint x="{p[0]}" y="{p[1]}"/>' for p in points[1:-1])
         color = connector.get("color", "#4f8f8a")
-        style = f'edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor={color};strokeWidth={connector.get("width", 2)};endArrow=block;endFill=1;'
+        style = (
+            f'edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;'
+            f'jumpStyle=arc;jumpSize=8;strokeColor={color};strokeWidth={connector.get("width", 2)};'
+            f'endArrow=block;endFill=1;'
+        )
         cells.append(
             f'<mxCell id="e{next_id}" value="{escape(connector.get("label", ""))}" style="{style}" edge="1" parent="connector_layer">'
             f'<mxGeometry relative="1" as="geometry"><mxPoint x="{start[0]}" y="{start[1]}" as="sourcePoint"/>'
@@ -641,26 +659,51 @@ def _write_png(svg_text: str, png_path: Path) -> None:
         png_path.with_suffix(".render-error.txt").write_text(str(exc), encoding="utf-8")
 
 
-def _try_export_vsdx(drawio_path: Path, vsdx_path: Path) -> dict[str, Any]:
+def _write_pdf(svg_text: str, pdf_path: Path, fallback_from: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        import cairosvg
+
+        cairosvg.svg2pdf(bytestring=svg_text.encode("utf-8"), write_to=str(pdf_path))
+    except Exception as exc:
+        pdf_path.with_suffix(".render-error.txt").write_text(str(exc), encoding="utf-8")
+        return {
+            "status": "unavailable",
+            "format": "pdf",
+            "reason": str(exc),
+            "fallback_from": fallback_from or {},
+        }
+    return {
+        "status": "exported",
+        "format": "pdf",
+        "path": str(pdf_path),
+        "via": "cairosvg",
+        "fallback_from": fallback_from or {},
+    }
+
+
+def _try_export_drawio(drawio_path: Path, output_path: Path, export_format: str) -> dict[str, Any]:
+    if os.environ.get("AI_DIAGRAM_FACTORY_SKIP_EXTERNAL_EXPORTS") == "1":
+        return {"status": "skipped", "format": export_format, "reason": "disabled by AI_DIAGRAM_FACTORY_SKIP_EXTERNAL_EXPORTS"}
     cmd = [
         "cli-anything-drawio",
         "--project",
         str(drawio_path),
         "export",
         "render",
-        str(vsdx_path),
+        str(output_path),
         "--format",
-        "vsdx",
+        export_format,
         "--overwrite",
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     except Exception as exc:
         return {"status": "skipped", "reason": str(exc), "command": cmd}
-    if result.returncode == 0 and vsdx_path.exists():
-        return {"status": "exported", "path": str(vsdx_path), "stdout": result.stdout}
+    if result.returncode == 0 and output_path.exists():
+        return {"status": "exported", "path": str(output_path), "format": export_format, "stdout": result.stdout}
     return {
         "status": "unavailable",
+        "format": export_format,
         "returncode": result.returncode,
         "stdout": result.stdout[-2000:],
         "stderr": result.stderr[-2000:],
@@ -670,7 +713,7 @@ def _try_export_vsdx(drawio_path: Path, vsdx_path: Path) -> dict[str, Any]:
 
 def _requested_source_formats(assembly: dict[str, Any], override: tuple[str, ...]) -> list[str]:
     raw = list(override) if override else list(assembly.get("source_formats", ["drawio"]))
-    allowed = {"drawio", "svg", "vsdx"}
+    allowed = {"drawio", "svg", "pdf", "vsdx"}
     result = []
     for item in raw:
         fmt = str(item).lower().lstrip(".")
@@ -724,6 +767,13 @@ def _placement_image_path(placement: dict[str, Any], stage_results: dict[str, di
             raise ValueError(f"Placement image file not found: {path}")
         return path
     asset_id = _required(placement, "asset")
+    preferred = str(placement.get("prefer", "svg")).lower()
+    if preferred == "svg":
+        stage = stage_results.get(asset_id)
+        if stage:
+            svg = stage.get("output", {}).get("svg")
+            if svg and Path(svg).is_file():
+                return Path(svg)
     return _stage_png(stage_results, asset_id)
 
 

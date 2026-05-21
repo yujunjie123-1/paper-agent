@@ -11,6 +11,7 @@ from .config import DEFAULT_OUTPUT_DIR, DRAWIO_HARNESS, PLOTNEURALNET_HARNESS
 from .io import abs_path, load_manifest, write_json, write_manifest
 from .planner import plan_workflow_manifest
 from .renderers import RENDERERS
+from .replicate import MODULE_LIMIT, replicate_from_plan
 from .templates import blank_manifest, deep_learning_gallery_manifest, reference_workflow_manifest
 from .workflow import render_workflow_manifest
 
@@ -101,7 +102,7 @@ def workflow_plan(manifest: str, output: str, only_ids: tuple[str, ...]) -> None
     "--source-format",
     "source_formats",
     multiple=True,
-    type=click.Choice(["drawio", "svg", "vsdx"], case_sensitive=False),
+    type=click.Choice(["drawio", "svg", "pdf", "vsdx"], case_sensitive=False),
     help="Final source format to place in deliverables. Repeat for multiple formats. PNG is always included.",
 )
 def workflow_render(manifest: str, out_dir: str, only_ids: tuple[str, ...], source_formats: tuple[str, ...]) -> None:
@@ -135,6 +136,50 @@ def brief(text: str, image_path: str, output: str) -> None:
         payload["figures"] = deep_learning_gallery_manifest()["figures"][:2]
     target = write_manifest(output, payload)
     click.echo(f"Created starter manifest: {target}")
+
+
+@cli.command()
+@click.option(
+    "--plan",
+    "plan_path",
+    required=True,
+    type=click.Path(exists=True),
+    help=f"Absolute path to a component plan JSON/YAML (at most {MODULE_LIMIT} modules).",
+)
+@click.option(
+    "--reference",
+    "reference_image",
+    default="",
+    type=click.Path(),
+    help="Optional absolute path to a reference image used as a locked Draw.io trace underlay.",
+)
+@click.option(
+    "--out-dir",
+    "out_dir",
+    default=str(DEFAULT_OUTPUT_DIR),
+    show_default=True,
+    type=click.Path(),
+    help="Absolute output directory.",
+)
+@click.option("--project", "project_name", default="", help="Optional project name override.")
+def replicate(plan_path: str, reference_image: str, out_dir: str, project_name: str) -> None:
+    """End-to-end replicate: component plan -> per-module backend rendering -> Draw.io master assembly.
+
+    Always writes PNG plus .drawio, .svg, and .vsdx (when draw.io Desktop is available) into deliverables/.
+    """
+    summary = replicate_from_plan(
+        plan_path,
+        out_dir,
+        reference_image=reference_image or None,
+        project_name=project_name or None,
+    )
+    click.echo(f"Modules: {summary['module_count']} / {summary['module_limit']}")
+    click.echo(f"Tool plan: {summary['tool_plan_path']}")
+    click.echo(f"Workflow dir: {summary['workflow_dir']}")
+    click.echo(f"Deliverables: {summary['deliverables_dir']}")
+    click.echo(f"VSDX export status: {summary['vsdx_status']}")
+    for warning in summary["warnings"]:
+        click.echo(f"WARNING: {warning}")
 
 
 @cli.command()

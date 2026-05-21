@@ -43,6 +43,13 @@ TOOL_PROFILES: dict[str, dict[str, str]] = {
         "source": "prompt plus reference image and generated transparent image",
         "handoff": "Use only when vector/code generation cannot match the reference component, then import into Draw.io.",
     },
+    "svg": {
+        "tool": "Standalone SVG module",
+        "renderer_kind": "svg_module",
+        "output": "self-contained editable SVG asset",
+        "source": ".svg source",
+        "handoff": "Generate the SVG once, then import it into the Draw.io master as a placement; Draw.io only owns cross-module connectors and global labels.",
+    },
 }
 
 
@@ -52,7 +59,9 @@ KIND_TO_ROUTE = {
     "drawio_flow": "drawio",
     "tikz_lstm": "tikz",
     "tikz_attention_gate": "tikz",
+    "tikz_module": "tikz",
     "graphviz_graph": "graphviz",
+    "svg_module": "svg",
 }
 
 
@@ -235,6 +244,10 @@ def classify_component(component: dict[str, Any]) -> dict[str, Any]:
 
 
 def _choose_route(component: dict[str, Any]) -> tuple[str, str, str]:
+    declared_backend = str(component.get("backend", "")).lower().strip()
+    if declared_backend in TOOL_PROFILES:
+        return declared_backend, "declared", "Component plan explicitly assigned this backend."
+
     explicit = str(component.get("preferred_route", "") or component.get("route", "")).lower().strip()
     if explicit in TOOL_PROFILES:
         return explicit, "declared", "The component declares an explicit route."

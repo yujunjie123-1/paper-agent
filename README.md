@@ -28,6 +28,35 @@ Each rendered figure gets:
 - its source file, such as `.drawio`, `.tex`, `.dot`, or PlotNeuralNet project `.json`.
 - a small metadata JSON file describing the renderer path used.
 
+## One-Command Replicate Workflow
+
+`replicate` is the end-to-end entry point. Hand it a component plan that I (Claude) write after reading your image or text, and it does everything else: per-module backend rendering, tool plan logging, Draw.io master assembly, and deliverables packaging with PNG plus vector/source formats (`.drawio`, `.svg`, `.pdf`, `.vsdx`).
+
+```powershell
+C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli replicate `
+  --plan      ABSOLUTE_PATH\component_plan.json `
+  --reference ABSOLUTE_PATH\source_image.png ^
+  --out-dir   ABSOLUTE_PATH\outputs\<run_name>
+```
+
+What lives where:
+
+- `<out_dir>/replicate_manifest.yaml` - the workflow manifest generated from the plan.
+- `<out_dir>/tool_plan.json` - which backend handles which module and why.
+- `<out_dir>/<workflow_id>/stages/<module_id>/` - the raw per-module renderer output (PlotNeuralNet `.json`/`.tex`, Draw.io `.drawio`, Graphviz `.dot`, TikZ `.tex`, etc.).
+- `<out_dir>/<workflow_id>/<master>.{drawio,svg,png}` - the Draw.io master assembly.
+- `<out_dir>/<workflow_id>/<master>_trace.{drawio,svg,png}` - the master with the reference image locked as an underlay (only if `--reference` was passed).
+- `<out_dir>/<workflow_id>/deliverables/` - PNG plus `.drawio`, `.svg`, `.pdf`, and `.vsdx` (PDF/VSDX require draw.io Desktop).
+- `<out_dir>/replicate_summary.json` - human-readable status, vsdx export state, warnings.
+
+Constraints:
+
+- The component plan must contain 1 to 12 modules. The renderer rejects more than 12 to keep the master assembly legible.
+- Each module declares its `backend` explicitly. The planner records the reason in `tool_plan.json`.
+- Source formats `.drawio`, `.svg`, `.pdf`, `.vsdx` are always requested by `replicate`; PDF/VSDX fall back to an `unavailable` status if draw.io Desktop is missing, without aborting the run.
+
+See [examples/component_plan_schema.md](examples/component_plan_schema.md) for the full schema and [examples/replication_prompt.md](examples/replication_prompt.md) for the checklist I follow when writing a plan from an image or text.
+
 ## Workflow With Codex
 
 Give Codex a paragraph or a reference image and ask it to create a manifest. Codex chooses the backend:
@@ -71,7 +100,7 @@ Before rendering a high-fidelity replica, create a tool assignment plan. This ma
 Create a plan JSON from a workflow manifest:
 
 ```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow plan E:\澶氳蒋浠跺崗浣淺ai-diagram-factory\examples\reference_multisoftware_workflow.yaml -o E:\澶氳蒋浠跺崗浣淺ai-diagram-factory\outputs\reference_workflow_tool_plan.json
+C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow plan E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml -o E:\多软件协作\ai-diagram-factory\outputs\reference_workflow_tool_plan.json
 ```
 
 `workflow render` also writes `tool_plan.json` inside each workflow output directory before rendering the stages. Review this file first when exact replication matters.
@@ -87,6 +116,7 @@ Choose final source format explicitly. PNG is always included:
 
 ```powershell
 C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow render E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow --source-format drawio
+C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow render E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow --source-format pdf
 C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow render E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow --source-format vsdx
 ```
 
@@ -103,11 +133,58 @@ The compatibility script now uses the same workflow:
 C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe E:\多软件协作\ai-diagram-factory\examples\replicate_reference_figures.py
 ```
 
+You can also pass absolute output paths explicitly:
+
+```powershell
+C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe E:\多软件协作\ai-diagram-factory\examples\replicate_reference_figures.py --manifest E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow --compat-dir E:\多软件协作\ai-diagram-factory\outputs\reference_replicas
+```
+
+## Configuration
+
+The package now derives its default project root from the installed source location. Override these paths when moving the project or using external tools in non-default locations:
+
+```powershell
+$env:AI_DIAGRAM_FACTORY_ROOT = "E:\多软件协作\ai-diagram-factory"
+$env:AI_DIAGRAM_FACTORY_OUTPUT_DIR = "E:\多软件协作\ai-diagram-factory\outputs"
+$env:PLOTNEURALNET_SOURCE_ROOT = "E:\多软件协作\PlotNeuralNet"
+$env:AI_DIAGRAM_FACTORY_PLOTNEURALNET_HARNESS = "E:\多软件协作\PlotNeuralNet\agent-harness"
+$env:AI_DIAGRAM_FACTORY_DRAWIO_HARNESS = "C:\Users\86180\Desktop\drawio\agent-harness"
+$env:AI_DIAGRAM_FACTORY_LATEX_TEMP_DIR = "C:\Users\86180\Documents\ai_diagram_factory_latex_tmp"
+```
+
+## Development Checks
+
+Install development tools and run the smoke tests:
+
+```powershell
+C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m pip install -e "E:\多软件协作\ai-diagram-factory[dev]"
+C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m pytest E:\多软件协作\ai-diagram-factory\tests
+```
+
+## High-Density Reference Figures
+
+For dense paper figures, do not ask an image model to recreate the whole picture in one pass. Use this sequence:
+
+1. Generate a component plan from the image content; do not use a fixed region count.
+2. Let the plan define however many semantic crops the image needs: layer stack, local inset, legend, connector cluster, dense node group, small label cluster, and so on.
+3. Run OCR-first reading for each crop: list every word, number, symbol, colored box, arrow, dashed guide, and connector endpoint before drawing.
+4. Convert each crop into a structured declaration, including exact text inventory and anchor-to-anchor line mapping.
+5. Render local components with deterministic SVG, Draw.io tables, PlotNeuralNet, Graphviz, or TikZ.
+6. Assemble in Draw.io only after local components are complete.
+7. Run an omission pass before export: check missing text, missing colored boxes, shifted arrows, and connector endpoints that do not touch their target objects.
+
+The LeNet-5 divide-and-conquer example uses an external component plan file. Replace that file for a different reference image; the script will crop however many components the new plan declares.
+
+```powershell
+C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe E:\多软件协作\ai-diagram-factory\examples\build_lenet_divide_conquer.py --reference-image ABSOLUTE_REFERENCE_IMAGE_PATH --component-plan E:\多软件协作\ai-diagram-factory\examples\lenet5_component_plan.json --out-dir E:\多软件协作\ai-diagram-factory\outputs\lenet5_divide_conquer
+```
+
 Visio export requires draw.io Desktop, because `.vsdx` is produced by the real diagrams.net exporter:
 
 ```powershell
 cli-anything-drawio export check
+cli-anything-drawio --project ABSOLUTE_DRAWIO_PATH export render ABSOLUTE_OUTPUT_PATH.pdf --format pdf --overwrite
 cli-anything-drawio --project ABSOLUTE_DRAWIO_PATH export render ABSOLUTE_OUTPUT_PATH.vsdx --format vsdx --overwrite
 ```
 
-If draw.io Desktop is missing, `workflow_report.json` records `vsdx_export.status = unavailable`. If `vsdx` was requested as a source format, the deliverables report marks it as missing.
+If draw.io Desktop is missing, `workflow_report.json` records `pdf_export.status = unavailable` or `vsdx_export.status = unavailable`. If `pdf` or `vsdx` was requested as a source format, the deliverables report marks it as missing.

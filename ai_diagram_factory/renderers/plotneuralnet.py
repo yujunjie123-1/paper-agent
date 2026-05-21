@@ -11,12 +11,16 @@ from PIL import ImageDraw
 from ..canvas import draw_arrow, draw_centered_text, load_font, new_canvas, save_png
 from ..config import PLOTNEURALNET_HARNESS, PLOTNEURALNET_SOURCE
 from ..io import write_json
+from ..latex_utils import compile_tikz_body_to_svg
 from ..styles import KIND_COLORS, PALETTE
 
 
 def render_plotneuralnet_cnn(figure: dict[str, Any], out_dir: Path) -> dict[str, Any]:
     fig_dir = out_dir / figure["id"]
     fig_dir.mkdir(parents=True, exist_ok=True)
+    if figure.get("compact") or figure.get("stack"):
+        return _render_compact_stack(figure, fig_dir)
+
     source_json = fig_dir / f"{figure['id']}.plotneuralnet.json"
     tex_path = fig_dir / f"{figure['id']}.tex"
     png_path = fig_dir / f"{figure['id']}.png"
@@ -43,6 +47,191 @@ def render_plotneuralnet_cnn(figure: dict[str, Any], out_dir: Path) -> dict[str,
         "sources": [str(source_json), str(tex_path)],
         "backend": cli_result,
     }
+
+
+def _render_compact_stack(figure: dict[str, Any], fig_dir: Path) -> dict[str, Any]:
+    """Render a single 3D feature-map stack as a tight-bbox SVG via standalone TikZ.
+
+    The figure dict accepts:
+        count           (int)   number of visible slices in the stack
+        face_width_mm   (float) front-face width in mm
+        face_height_mm  (float) front-face height in mm
+        step_mm         (float) per-slice perspective offset in mm
+        depth_x_mm      (float) top/side-face x offset in mm
+        depth_y_mm      (float) top/side-face y offset in mm
+        fill            (str)   TikZ color for the stack faces (default 'black!28')
+        top_fill        (str)   optional TikZ color for top faces
+        side_fill       (str)   optional TikZ color for side faces
+        stroke          (str)   TikZ color for stack outlines (default 'black')
+        overlays        (list)  selected cells / receptive-field markers (see below)
+
+    Each overlay item is::
+
+        {
+            "x": <mm>, "y": <mm>, "width": <mm>, "height": <mm>,
+            "color": "<tikz color>",
+            "mode": "outline" | "filled" | "translucent",
+            "line_width": <mm>,
+        }
+    """
+    png_path = fig_dir / f"{figure['id']}.png"
+    body = _compact_stack_body(figure)
+    latex_result = compile_tikz_body_to_svg(
+        body,
+        fig_dir,
+        figure["id"],
+        engine=figure.get("engine", "auto"),
+        text_mode=figure.get("text_mode", "paths"),
+    )
+    sources = [latex_result["tex"]]
+    if latex_result.get("pdf"):
+        sources.append(latex_result["pdf"])
+    if latex_result.get("svg"):
+        sources.append(latex_result["svg"])
+        _rasterize_svg_to_png(latex_result["svg"], png_path)
+    if not png_path.exists():
+        _render_compact_stack_png(figure, png_path)
+    backend_status = "tikz_compact_svg" if latex_result.get("svg") else "pillow_preview"
+    result: dict[str, Any] = {
+        "id": figure["id"],
+        "kind": "plotneuralnet_cnn",
+        "png": str(png_path),
+        "sources": sources,
+        "backend": {"status": backend_status, "pdf_status": latex_result.get("pdf_status"), "svg_status": latex_result.get("svg_status")},
+    }
+    if latex_result.get("svg"):
+        result["svg"] = latex_result["svg"]
+    return result
+
+
+def _compact_stack_body(figure: dict[str, Any]) -> str:
+    count = max(1, int(figure.get("count", 6)))
+    face_w = float(figure.get("face_width_mm", 24.0))
+    face_h = float(figure.get("face_height_mm", 24.0))
+    step = float(figure.get("step_mm", 1.4))
+    depth_x = float(figure.get("depth_x_mm", max(0.8, step * 0.85)))
+    depth_y = float(figure.get("depth_y_mm", max(0.6, step * 0.65)))
+    fill = str(figure.get("fill", "black!28"))
+    top_fill = str(figure.get("top_fill", fill))
+    side_fill = str(figure.get("side_fill", fill))
+    stroke = str(figure.get("stroke", "black"))
+    line_width = float(figure.get("line_width_mm", 0.25))
+    overlays = figure.get("overlays", []) or []
+
+    lines: list[str] = ["\\begin{tikzpicture}[x=1mm, y=1mm]"]
+    for i in range(count - 1, -1, -1):
+        ox = i * step
+        oy = i * step
+        x0 = ox
+        y0 = oy
+        x1 = ox + face_w
+        y1 = oy + face_h
+        lines.extend(
+            [
+                f"  \\fill[{top_fill}, draw={stroke}, line width={line_width:.2f}mm] "
+                f"({x0:.2f},{y1:.2f}) -- ({x0 + depth_x:.2f},{y1 + depth_y:.2f}) -- "
+                f"({x1 + depth_x:.2f},{y1 + depth_y:.2f}) -- ({x1:.2f},{y1:.2f}) -- cycle;",
+                f"  \\fill[{side_fill}, draw={stroke}, line width={line_width:.2f}mm] "
+                f"({x1:.2f},{y0:.2f}) -- ({x1 + depth_x:.2f},{y0 + depth_y:.2f}) -- "
+                f"({x1 + depth_x:.2f},{y1 + depth_y:.2f}) -- ({x1:.2f},{y1:.2f}) -- cycle;",
+                f"  \\fill[{fill}, draw={stroke}, line width={line_width:.2f}mm] "
+                f"({x0:.2f},{y0:.2f}) rectangle ({x1:.2f},{y1:.2f});",
+            ]
+        )
+    for overlay in overlays:
+        kind = str(overlay.get("type", "rect"))
+        ox = float(overlay.get("x", 0))
+        oy = float(overlay.get("y", 0))
+        ow = float(overlay.get("width", 4))
+        oh = float(overlay.get("height", 4))
+        color = str(overlay.get("color", "red"))
+        mode = str(overlay.get("mode", "outline"))
+        lw = float(overlay.get("line_width_mm", 0.45))
+        if kind == "rect":
+            if mode == "filled":
+                lines.append(
+                    f"  \\fill[{color}, draw={color}, line width={lw:.2f}mm] "
+                    f"({ox:.2f},{oy:.2f}) rectangle ++({ow:.2f},{oh:.2f});"
+                )
+            elif mode == "translucent":
+                opacity = float(overlay.get("opacity", 0.28))
+                lines.append(
+                    f"  \\fill[{color}, opacity={opacity:.2f}] "
+                    f"({ox:.2f},{oy:.2f}) rectangle ++({ow:.2f},{oh:.2f});"
+                )
+                lines.append(
+                    f"  \\draw[{color}, line width={lw:.2f}mm] "
+                    f"({ox:.2f},{oy:.2f}) rectangle ++({ow:.2f},{oh:.2f});"
+                )
+            else:
+                lines.append(
+                    f"  \\draw[{color}, line width={lw:.2f}mm] "
+                    f"({ox:.2f},{oy:.2f}) rectangle ++({ow:.2f},{oh:.2f});"
+                )
+    lines.append("\\end{tikzpicture}")
+    return "\n".join(lines)
+
+
+def _rasterize_svg_to_png(svg_path: str, png_path: Path) -> None:
+    try:
+        import cairosvg
+
+        cairosvg.svg2png(url=svg_path, write_to=str(png_path), output_width=600)
+    except Exception as exc:
+        png_path.with_suffix(".render-error.txt").write_text(str(exc), encoding="utf-8")
+
+
+def _render_compact_stack_png(figure: dict[str, Any], png_path: Path) -> None:
+    count = int(figure.get("count", 6))
+    scale = 6
+    face_w = int(float(figure.get("face_width_mm", 24.0)) * scale)
+    face_h = int(float(figure.get("face_height_mm", 24.0)) * scale)
+    step = max(2, int(float(figure.get("step_mm", 1.4)) * scale))
+    depth_x = max(1, int(float(figure.get("depth_x_mm", max(0.8, float(figure.get("step_mm", 1.4)) * 0.85))) * scale))
+    depth_y = max(1, int(float(figure.get("depth_y_mm", max(0.6, float(figure.get("step_mm", 1.4)) * 0.65))) * scale))
+    margin = 14
+    total_w = face_w + step * (count - 1) + depth_x + margin * 2
+    total_h = face_h + step * (count - 1) + depth_y + margin * 2
+    img, draw = new_canvas(total_w, total_h, "#FFFFFF")
+    for i in range(count - 1, -1, -1):
+        x0 = margin + i * step
+        y0 = total_h - margin - face_h - depth_y - i * step
+        top = [(x0, y0), (x0 + depth_x, y0 - depth_y), (x0 + face_w + depth_x, y0 - depth_y), (x0 + face_w, y0)]
+        side = [
+            (x0 + face_w, y0),
+            (x0 + face_w + depth_x, y0 - depth_y),
+            (x0 + face_w + depth_x, y0 + face_h - depth_y),
+            (x0 + face_w, y0 + face_h),
+        ]
+        draw.polygon(top, fill="#b8b8b8", outline="#222222")
+        draw.polygon(side, fill="#929292", outline="#222222")
+        draw.rectangle((x0, y0, x0 + face_w, y0 + face_h), fill="#a8a8a8", outline="#222222", width=1)
+    for overlay in figure.get("overlays", []) or []:
+        ox = margin + int(float(overlay.get("x", 0)) * scale)
+        oy = total_h - margin - face_h - depth_y + face_h - int((float(overlay.get("y", 0)) + float(overlay.get("height", 4))) * scale)
+        ow = int(float(overlay.get("width", 4)) * scale)
+        oh = int(float(overlay.get("height", 4)) * scale)
+        color = _fallback_overlay_color(str(overlay.get("color", "red")))
+        if overlay.get("mode") in {"filled", "translucent"}:
+            draw.rectangle((ox, oy, ox + ow, oy + oh), fill=color, outline=color, width=2)
+        else:
+            draw.rectangle((ox, oy, ox + ow, oy + oh), outline=color, width=2)
+    save_png(img, png_path)
+
+
+def _fallback_overlay_color(color: str) -> str:
+    lower = color.lower()
+    if "red" in lower or "ff" in lower or "ee" in lower:
+        return "#ee2020"
+    if "blue" in lower or "1287" in lower:
+        return "#1287cf"
+    if "green" in lower or "22aa" in lower:
+        return "#22aa44"
+    if "magenta" in lower or "cc33" in lower:
+        return "#cc33cc"
+    if "yellow" in lower or "f4" in lower:
+        return "#d4ba1e"
+    return "#222222"
 
 
 def _to_plotneuralnet_items(layers: list[dict[str, Any]]) -> list[dict[str, Any]]:
