@@ -1,0 +1,23 @@
+schema_version: "1.0"
+policy:
+  auto_install: false
+  require_commit_pin: true
+  require_license_review: true
+  require_script_review: true
+  require_network_and_filesystem_scope_review: true
+sources:
+  - id: nature-skills
+    url: https://github.com/Yuan1z0825/nature-skills
+    purpose: Nature-family reading, writing, polishing, figures, review, response, and presentation skills
+    trust: community_unverified
+    activation: manual_after_audit
+  - id: nature-paper-skills
+    url: https://github.com/Boom5426/Nature-Paper-Skills
+    purpose: Nature-style manuscript workflow, citation verification, submission audit, and rebuttal skills
+    trust: community_unverified
+    activation: manual_after_audit
+notes:
+  - These projects are not official Nature Portfolio policies.
+  - Official journal instructions always override a community style skill.
+  - A style skill cannot create evidence, citations, results, or ethics approvals.
+

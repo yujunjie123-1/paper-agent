@@ -1,0 +1,4 @@
+interface:
+  display_name: "Venue Intelligence"
+  short_description: "Verify and rank journals, conferences, or competitions"
+  default_prompt: "Use $venue-intelligence to verify candidate venues from official sources."

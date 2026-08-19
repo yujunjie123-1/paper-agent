@@ -1,0 +1,15 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PAPER_AGENTS_PROVIDER: mock
+      PAPER_AGENTS_DB: /data/paper_agents.db
+      PAPER_AGENTS_AUTO_APPROVE: "false"
+    volumes:
+      - paper-agent-data:/data
+    restart: unless-stopped
+
+volumes:
+  paper-agent-data:

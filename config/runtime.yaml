@@ -1,0 +1,22 @@
+schema_version: "2.0"
+selected_runtime: langgraph
+reference_runtime: native-python
+runtime_policy:
+  application_owns_domain_state: true
+  checkpoint_every_node: true
+  side_effects_require_idempotency: true
+  interrupts_require_json_payloads: true
+  replay_safe_nodes_required: true
+alternatives:
+  microsoft-agent-framework:
+    status: reconsider
+    triggers: [azure_first_platform, dotnet_team, durable_streaming_required]
+  temporal:
+    status: reconsider
+    triggers: [multi_region_workers, strict_long_running_sla, cross_service_sagas]
+  autogen-crewai:
+    status: rejected_as_control_plane
+    reason: conversational_team_abstraction_does_not_match_primary_failure_model
+  openai-responses-multi-agent:
+    status: stage_accelerator_only
+    reason: beta_and_best_for_independent_request_scoped_branches

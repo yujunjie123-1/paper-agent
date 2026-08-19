@@ -1,0 +1,55 @@
+schema_version: "1.0"
+workflow_id: paper-lifecycle-2026
+principles:
+  - deterministic_macro_graph
+  - bounded_agentic_micro_loops
+  - immutable_artifact_blackboard
+  - fan_out_fan_in_only_for_independent_work
+  - human_gates_before_costly_or_external_actions
+  - evidence_before_claims
+stages:
+  - id: venue_research
+    mode: parallel_then_adjudicate
+    agents: [journal_scout, conference_scout, competition_scout]
+    join: venue_adjudicator
+  - id: topic_selection
+    mode: parallel_then_adjudicate
+    agents: [novelty_scout, feasibility_scout, impact_scout]
+    join: topic_adjudicator
+  - id: literature_review
+    mode: parallel_then_adjudicate
+    agents: [semantic_librarian, citation_graph_librarian, prior_art_skeptic]
+    join: evidence_synthesizer
+  - id: research_design
+    mode: sequential
+    agents: [research_designer]
+  - id: research_plan_approval
+    mode: human_gate
+    gate: research_plan
+  - id: experimentation
+    mode: sequential
+    agents: [experiment_runner, statistician, reproducibility_engineer]
+  - id: manuscript
+    mode: sequential
+    agents: [figure_designer, manuscript_writer]
+  - id: expert_review
+    mode: parallel_then_adjudicate
+    agents: [methodology_reviewer, statistics_reviewer, novelty_reviewer, ethics_reviewer, reproducibility_reviewer, venue_reviewer]
+    join: review_adjudicator
+  - id: revision
+    mode: conditional_loop
+    condition: review_score_below_threshold
+    agents: [revision_planner, manuscript_reviser]
+    target: expert_review
+  - id: submission_package
+    mode: sequential
+    agents: [submission_packager]
+  - id: submission_approval
+    mode: human_gate
+    gate: submission
+  - id: portal_submission
+    mode: sequential
+    agents: [portal_operator]
+external_review_flow:
+  agents: [revision_planner, rebuttal_writer, manuscript_reviser]
+  then: expert_review

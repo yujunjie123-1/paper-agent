@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence Ledger"
+  short_description: "Build a traceable literature and claim evidence ledger"
+  default_prompt: "Use $evidence-ledger to search and verify literature for this claim."

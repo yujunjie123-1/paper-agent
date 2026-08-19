@@ -1,0 +1,4 @@
+interface:
+  display_name: "Expert Review"
+  short_description: "Run independent evidence-located manuscript reviews"
+  default_prompt: "Use $expert-review to review this manuscript against the rubric."

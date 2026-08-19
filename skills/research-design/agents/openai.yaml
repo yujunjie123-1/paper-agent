@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Design"
+  short_description: "Design reproducible hypotheses, experiments, and analyses"
+  default_prompt: "Use $research-design to turn this topic into a preregistered protocol."

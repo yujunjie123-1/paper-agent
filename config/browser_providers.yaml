@@ -1,0 +1,39 @@
+schema_version: "1.0"
+default_by_platform:
+  darwin: ego-lite
+  windows: chrome-control
+  linux: agent-browser-profile
+providers:
+  ego-lite:
+    skill: ego-browser
+    project: https://github.com/citrolabs/ego-lite
+    platforms: [darwin]
+    session_model: inherited_user_profile_plus_isolated_spaces
+    install: manual
+    capabilities: [snapshot, navigate, fill, click, wait, download, upload, javascript, parallel_spaces]
+  chrome-control:
+    skill: chrome-control-chrome
+    platforms: [windows, darwin, linux]
+    session_model: existing_user_chrome_session
+    install: bundled_or_manual
+    capabilities: [snapshot, navigate, fill, click, wait, download, upload]
+  agent-browser-profile:
+    project: https://github.com/vercel-labs/agent-browser
+    platforms: [windows, darwin, linux]
+    session_model: encrypted_persistent_profile_or_restored_session
+    install: manual
+    capabilities: [snapshot, navigate, fill, click, wait, download, upload]
+policy:
+  credentials_in_prompt: forbidden
+  raw_cookie_export_to_project: forbidden
+  allowlist_required: true
+  human_takeover_events: [captcha, mfa, payment, changed_terms, identity_check, unexpected_permission]
+  final_submission_requires_gate: submission
+profiles:
+  scholarly-search:
+    allowed_domains: []
+    note: Fill with institution-authorized databases after manual login.
+  venue-portals:
+    allowed_domains: []
+    note: Fill with selected official submission portals.
+

@@ -1,0 +1,18 @@
+schema_version: "2.0"
+variants: [native-single, native-multi, langgraph-single, langgraph-multi, request-multi-stage]
+primary_metrics: [task_success_rate, blocker_defect_recall]
+guardrails:
+  acl_leakage_rate: 0
+  duplicate_side_effect_rate: 0
+  blocker_suppression_count: 0
+secondary_metrics:
+  - retrieval_recall_at_k
+  - retrieval_ndcg
+  - citation_precision
+  - tool_selection_accuracy
+  - loop_termination_rate
+  - crash_resume_success_rate
+  - p95_latency_ms
+  - total_tokens
+  - estimated_cost_usd
+release_policy: no_claim_without_same_dataset_comparison

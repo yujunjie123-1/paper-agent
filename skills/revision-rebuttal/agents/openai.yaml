@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revision and Rebuttal"
+  short_description: "Map review comments to revisions and point-by-point replies"
+  default_prompt: "Use $revision-rebuttal to build a traceable revision and rebuttal plan."

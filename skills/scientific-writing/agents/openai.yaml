@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scientific Writing"
+  short_description: "Draft evidence-bounded manuscript sections and figures"
+  default_prompt: "Use $scientific-writing to draft this section without inventing evidence."

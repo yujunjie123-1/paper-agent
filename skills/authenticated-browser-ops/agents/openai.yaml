@@ -1,0 +1,4 @@
+interface:
+  display_name: "Authenticated Browser Operations"
+  short_description: "Reuse trusted login sessions for research browser tasks"
+  default_prompt: "Use $authenticated-browser-ops to complete this authorized browser workflow safely."

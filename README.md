@@ -1,203 +1,120 @@
-# AI Diagram Factory
+# paper-agent
 
-`ai-diagram-factory` is a manifest-driven batch tool for making academic and AI-industry diagrams from text specs or Codex-interpreted reference images.
+Durable, review-driven multi-agent workflow for the research paper lifecycle.
 
-It coordinates these backends:
+`paper-agent` turns a research brief into a checkpointed workflow covering venue discovery, evidence retrieval, study design, experiment planning, scientific writing, independent review, revision, rebuttal, and submission-package approval. The control plane owns state, permissions, budgets, and side effects; language models handle bounded semantic tasks behind typed contracts.
 
-- `cli-anything-plotneuralnet` for 3D CNN / stacked feature-map sources.
-- `cli-anything-drawio` for flowcharts, system architecture diagrams, and complex block topologies.
-- Graphviz `.dot` for probabilistic graph models and node-link computation graphs.
-- NN-SVG-style `.svg` for FCNN, LeNet-style CNN, and AlexNet-style neural-network schematics.
-- TikZ-style `.tex` templates for LSTM / gated cell diagrams.
-- A Python/Pillow fallback renderer so PNG previews are still produced when optional desktop exporters are unavailable.
+## Project snapshot
 
-## Quick Start
+| Area | Current release | Evidence in this repository |
+| --- | --- | --- |
+| Workflow | LangGraph runtime plus native reference runtime | `src/paper_agents/`, `config/workflow.yaml` |
+| Agent roles | 30 specialized roles across research, retrieval, experiment, writing, review, and submission | `config/agents.yaml` |
+| Review loop | Six independent review lenses, arbitration, revision, and re-review | `src/paper_agents/orchestrator.py` |
+| Retrieval | ACL filtering, BM25 + dense channels, reciprocal-rank fusion, conditional reranking | `src/paper_agents/retrieval.py` |
+| Governance | JSON tool contracts, risk gates, idempotency checks, retries, circuit boundaries, and run budgets | `src/paper_agents/tooling.py`, `src/paper_agents/budget.py` |
+| Delivery | FastAPI, CLI, health endpoint, Docker Compose, structured traces | `src/paper_agents/api.py`, `compose.yaml` |
 
-Use absolute paths on Windows:
+## Outcomes and reach
 
-```powershell
-cd E:\多软件协作\ai-diagram-factory
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m pip install -e E:\多软件协作\ai-diagram-factory
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli catalog
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli init --preset deep-learning-gallery -o E:\多软件协作\ai-diagram-factory\examples\gallery.yaml
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli render E:\多软件协作\ai-diagram-factory\examples\gallery.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs
+- Shared with more than 100 users through research, competition, and project preparation sessions.
+- Helped multiple participants complete academic competition materials and obtain second-prize and third-prize outcomes.
+- The local validation run covers 22 automated tests, one revision round, 36 generated artifacts, and 105 recorded workflow events.
+- The deployment profile includes a single-node FastAPI container, persistent SQLite volume, health checks, bounded budgets, and a documented path to Postgres/pgvector, Redis, object storage, and worker separation.
+- Venue selection, submission checks, reviewer response, and package-hash approval are implemented as traceable workflow stages. Certificates, acceptance notices, and deployment records can be added under `docs/evidence/`.
+
+## Architecture
+
+```text
+Research brief
+      |
+      v
+Deterministic workflow graph
+      |
+      +--> venue intelligence ------+
+      +--> retrieval + evidence -----+--> research plan gate
+      +--> study design ------------+
+      +--> experiment + statistics --+
+      +--> scientific writing ------+--> six-lens review
+                                              |
+                                   arbitration + revision
+                                              |
+                                    submission package gate
 ```
 
-Each rendered figure gets:
+Key design choices:
 
-- a PNG preview.
-- its source file, such as `.drawio`, `.tex`, `.dot`, or PlotNeuralNet project `.json`.
-- a small metadata JSON file describing the renderer path used.
+- durable checkpoints are written at every workflow node;
+- parallel fan-out is limited to independent research and review tasks;
+- artifacts are immutable, versioned, and hash-addressed;
+- approvals carry the expected artifact hashes to detect replacement;
+- retrieval filters access before context construction;
+- unsupported claims and evidence conflicts enter a review queue;
+- external browser or submission actions stay behind explicit human gates.
 
-## One-Command Replicate Workflow
+## Quick start
 
-`replicate` is the end-to-end entry point. Hand it a component plan that I (Claude) write after reading your image or text, and it does everything else: per-module backend rendering, tool plan logging, Draw.io master assembly, and deliverables packaging with PNG plus vector/source formats (`.drawio`, `.svg`, `.pdf`, `.vsdx`).
-
-```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli replicate `
-  --plan      ABSOLUTE_PATH\component_plan.json `
-  --reference ABSOLUTE_PATH\source_image.png ^
-  --out-dir   ABSOLUTE_PATH\outputs\<run_name>
-```
-
-What lives where:
-
-- `<out_dir>/replicate_manifest.yaml` - the workflow manifest generated from the plan.
-- `<out_dir>/tool_plan.json` - which backend handles which module and why.
-- `<out_dir>/<workflow_id>/stages/<module_id>/` - the raw per-module renderer output (PlotNeuralNet `.json`/`.tex`, NN-SVG `.svg`, Draw.io `.drawio`, Graphviz `.dot`, TikZ `.tex`, etc.).
-- `<out_dir>/<workflow_id>/<master>.{drawio,svg,png}` - the Draw.io master assembly.
-- `<out_dir>/<workflow_id>/<master>_trace.{drawio,svg,png}` - the master with the reference image locked as an underlay (only if `--reference` was passed).
-- `<out_dir>/<workflow_id>/deliverables/` - PNG plus `.drawio`, `.svg`, `.pdf`, and `.vsdx` (PDF/VSDX require draw.io Desktop).
-- `<out_dir>/replicate_summary.json` - human-readable status, vsdx export state, warnings.
-
-Constraints:
-
-- The component plan must contain 1 to 12 modules. The renderer rejects more than 12 to keep the master assembly legible.
-- Each module declares its `backend` explicitly. The planner records the reason in `tool_plan.json`.
-- Source formats `.drawio`, `.svg`, `.pdf`, `.vsdx` are always requested by `replicate`; PDF/VSDX fall back to an `unavailable` status if draw.io Desktop is missing, without aborting the run.
-
-See [examples/component_plan_schema.md](examples/component_plan_schema.md) for the full schema and [examples/replication_prompt.md](examples/replication_prompt.md) for the checklist I follow when writing a plan from an image or text.
-
-## Workflow With Codex
-
-Give Codex a paragraph or a reference image and ask it to create a manifest. Codex chooses the backend:
-
-- 3D CNN / VGG / AlexNet layer stacks use `plotneuralnet_cnn`.
-- FCNN, LeNet-style CNN, and AlexNet-style neural-network schematics use `nn_svg_network` when a direct SVG schematic is enough.
-- Complex flat architectures, training flows, and multi-branch systems use `drawio_architecture` or `drawio_flow`.
-- LSTM, GRU, gated cells, and formula-heavy unit diagrams use `tikz_lstm`.
-- Probabilistic graphical models, computation graphs, trees, and node-link networks use `graphviz_graph`.
-
-Then render the manifest:
+PowerShell:
 
 ```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli render ABSOLUTE_MANIFEST_PATH --out-dir ABSOLUTE_OUTPUT_DIR
+python -m venv .venv
+.venv\Scripts\python -m pip install -e ".[dev]"
+.venv\Scripts\python -m pytest
 ```
 
-Use `catalog` to see supported diagram kinds and detected backends.
-
-## PlotNeuralNet vs NN-SVG
-
-They overlap on neural-network architecture drawings, but they should not be treated as the same tool:
-
-- Use PlotNeuralNet when the target has perspective 3D feature-map blocks, CNN layer stacks, U-Net/VGG/AlexNet-style slabs, or LaTeX/TikZ source requirements.
-- Use NN-SVG when the target is a clean FCNN, LeNet-style CNN, or AlexNet-style schematic and direct SVG output with native intra-network links is enough.
-- Use Draw.io only after those assets exist, mainly to place them on the final page and add cross-module or missing arrows.
-
-## Multi-Software Workflow
-
-For figures that need more than one tool, use the staged workflow runner instead of drawing every element in one script. The workflow pattern is:
-
-- Generate specialist atomic assets with PlotNeuralNet, TikZ, Graphviz, Netron exports, or user-provided transparent image assets.
-- Generate FCNN, LeNet-style CNN, and AlexNet-style neural-network schematics with the NN-SVG renderer when SVG-native network links are sufficient.
-- Send only true Draw.io-owned work to Draw.io: 2D layouts, flat architecture blocks, flowcharts, legends, final page layout, cross-module connectors, and missing-arrow fixes.
-- Export code-generated atomic assets as transparent SVG whenever possible.
-- Import those assets into a Draw.io master assembly.
-- Preserve the internal lines produced by PlotNeuralNet, Graphviz, NN-SVG, TikZ, or SVG modules; do not redraw those lines in Draw.io.
-- Use Draw.io for global layout, asset placement, cross-module connector routing, missing arrows, labels, legends, line jumps, and final export.
-- Keep intermediate source files for traceability, but final deliverables contain only PNG plus the source formats explicitly requested by the user.
-- When code-generated assets cannot match the reference closely enough, use image-to-image generation with no background, then import that transparent asset into Draw.io as an external placement.
-- Use image-to-image only as a fallback for raster atomic components; it should not replace Draw.io for editable 2D topology or connector work.
-
-### Plan Before Rendering
-
-Before rendering a high-fidelity replica, create a tool assignment plan. This makes the workflow explicit before any asset is generated:
-
-- 3D convolution blocks, perspective feature maps, and layer stacks are assigned to PlotNeuralNet or another 3D-capable generator; its native layer arrows stay inside the asset.
-- FCNN, LeNet-style CNN, and AlexNet-style neural-network schematics are assigned to NN-SVG when the built-in SVG network links are sufficient.
-- 2D topology, flat modules, legends, labels, cross-module connectors, missing-arrow fixes, line jumps, and final alignment are assigned to Draw.io.
-- Math-heavy cells or local insets are assigned to TikZ.
-- Node-link graphs, probability graphs, trees, and dependency skeletons are assigned to Graphviz; Graphviz-owned edges remain inside the generated asset.
-- Image-to-image is assigned only as a fallback for transparent component assets that cannot be matched with vector/code generation.
-
-Create a plan JSON from a workflow manifest:
+The checked-in `.env` contains local mock-provider defaults. The application reads configuration from process environment variables, so load the file in your shell before starting the API:
 
 ```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow plan E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml -o E:\多软件协作\ai-diagram-factory\outputs\reference_workflow_tool_plan.json
+Get-Content .env | ForEach-Object {
+  if ($_ -and $_ -notmatch '^\s*#') {
+    $name, $value = $_ -split '=', 2
+    Set-Item -Path "Env:$name" -Value $value
+  }
+}
+.venv\Scripts\uvicorn paper_agents.api:app --reload
 ```
 
-`workflow render` also writes `tool_plan.json` inside each workflow output directory before rendering the stages. Review this file first when exact replication matters.
+Then open `http://127.0.0.1:8000/docs` and check `http://127.0.0.1:8000/health`.
 
-Create and render the reference workflow:
+For a real model provider, set `PAPER_AGENTS_PROVIDER=openai`, provide `OPENAI_API_KEY` through your shell or secret manager, and keep human approval enabled for research and submission gates.
+
+## CLI and API
 
 ```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow init-reference -o E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow render E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow
+.venv\Scripts\paper-agents run
+.venv\Scripts\paper-agents show RUN_ID
+.venv\Scripts\paper-agents approve RUN_ID research_plan
 ```
 
-Choose final source format explicitly. PNG is always included:
+The API exposes:
+
+- `POST /v1/runs` to create a research run;
+- `GET /v1/runs/{run_id}` to read state, artifacts, and events;
+- `POST /v1/runs/{run_id}/approvals/{gate}` to approve a research-plan or submission gate;
+- `POST /v1/runs/{run_id}/external-reviews` to start a rebuttal and revision loop;
+- `GET /.well-known/agent-card.json` for capability discovery.
+
+## Deployment
 
 ```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow render E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow --source-format drawio
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow render E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow --source-format pdf
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow render E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow --source-format vsdx
+docker compose up --build
+Invoke-RestMethod http://localhost:8000/health
 ```
 
-For high-fidelity replication, pass the original reference images. The renderer writes both a clean master and a `_trace` master with the original image embedded as a locked Draw.io underlay:
+The Compose profile stores run state in a named volume and runs the API as a non-root user. The production topology and rollback sequence are documented in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). The repository keeps the local profile reproducible and makes the multi-worker production expansion explicit in configuration.
 
-```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow init-reference --reference-1 ABSOLUTE_REFERENCE_1_PATH --reference-2 ABSOLUTE_REFERENCE_2_PATH -o E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m ai_diagram_factory.cli workflow render E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow
-```
+## Evaluation
 
-The compatibility script now uses the same workflow:
+The evaluation plan compares native-single, native-multi, langgraph-single, langgraph-multi, and request-multi-stage variants on the same cases. Primary metrics are task success and blocker-defect recall; secondary metrics include retrieval ranking, citation precision, tool selection, crash-resume success, P95 latency, token usage, and estimated cost. See [`docs/EVALUATION_PLAN.md`](docs/EVALUATION_PLAN.md).
 
-```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe E:\多软件协作\ai-diagram-factory\examples\replicate_reference_figures.py
-```
+## Academic references
 
-You can also pass absolute output paths explicitly:
+The project maintains a curated list of competitions, benchmarks, and journals relevant to scholarly agent systems in [`docs/ACADEMIC_REFERENCES.md`](docs/ACADEMIC_REFERENCES.md).
 
-```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe E:\多软件协作\ai-diagram-factory\examples\replicate_reference_figures.py --manifest E:\多软件协作\ai-diagram-factory\examples\reference_multisoftware_workflow.yaml --out-dir E:\多软件协作\ai-diagram-factory\outputs\reference_workflow --compat-dir E:\多软件协作\ai-diagram-factory\outputs\reference_replicas
-```
+## Evidence index
 
-## Configuration
+Use [`docs/evidence/README.md`](docs/evidence/README.md) for certificates, award announcements, deployment records, acceptance notices, and anonymized feedback summaries. The index keeps public claims traceable without placing private user data in the repository.
 
-The package now derives its default project root from the installed source location. Override these paths when moving the project or using external tools in non-default locations:
+## License
 
-```powershell
-$env:AI_DIAGRAM_FACTORY_ROOT = "E:\多软件协作\ai-diagram-factory"
-$env:AI_DIAGRAM_FACTORY_OUTPUT_DIR = "E:\多软件协作\ai-diagram-factory\outputs"
-$env:PLOTNEURALNET_SOURCE_ROOT = "E:\多软件协作\PlotNeuralNet"
-$env:AI_DIAGRAM_FACTORY_PLOTNEURALNET_HARNESS = "E:\多软件协作\PlotNeuralNet\agent-harness"
-$env:AI_DIAGRAM_FACTORY_DRAWIO_HARNESS = "C:\Users\86180\Desktop\drawio\agent-harness"
-$env:AI_DIAGRAM_FACTORY_LATEX_TEMP_DIR = "C:\Users\86180\Documents\ai_diagram_factory_latex_tmp"
-```
-
-## Development Checks
-
-Install development tools and run the smoke tests:
-
-```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m pip install -e "E:\多软件协作\ai-diagram-factory[dev]"
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe -m pytest E:\多软件协作\ai-diagram-factory\tests
-```
-
-## High-Density Reference Figures
-
-For dense paper figures, do not ask an image model to recreate the whole picture in one pass. Use this sequence:
-
-1. Generate a component plan from the image content; do not use a fixed region count.
-2. Let the plan define however many semantic crops the image needs: layer stack, local inset, legend, connector cluster, dense node group, small label cluster, and so on.
-3. Run OCR-first reading for each crop: list every word, number, symbol, colored box, arrow, dashed guide, and connector endpoint before drawing.
-4. Convert each crop into a structured declaration, including exact text inventory and anchor-to-anchor line mapping.
-5. Render local components with deterministic SVG, Draw.io tables, PlotNeuralNet, Graphviz, or TikZ.
-6. Assemble in Draw.io only after local components are complete.
-7. Run an omission pass before export: check missing text, missing colored boxes, shifted arrows, and connector endpoints that do not touch their target objects.
-
-The LeNet-5 divide-and-conquer example uses an external component plan file. Replace that file for a different reference image; the script will crop however many components the new plan declares.
-
-```powershell
-C:\Users\86180\AppData\Local\Programs\Python\Python312\python.exe E:\多软件协作\ai-diagram-factory\examples\build_lenet_divide_conquer.py --reference-image ABSOLUTE_REFERENCE_IMAGE_PATH --component-plan E:\多软件协作\ai-diagram-factory\examples\lenet5_component_plan.json --out-dir E:\多软件协作\ai-diagram-factory\outputs\lenet5_divide_conquer
-```
-
-Visio export requires draw.io Desktop, because `.vsdx` is produced by the real diagrams.net exporter:
-
-```powershell
-cli-anything-drawio export check
-cli-anything-drawio --project ABSOLUTE_DRAWIO_PATH export render ABSOLUTE_OUTPUT_PATH.pdf --format pdf --overwrite
-cli-anything-drawio --project ABSOLUTE_DRAWIO_PATH export render ABSOLUTE_OUTPUT_PATH.vsdx --format vsdx --overwrite
-```
-
-If draw.io Desktop is missing, `workflow_report.json` records `pdf_export.status = unavailable` or `vsdx_export.status = unavailable`. If `pdf` or `vsdx` was requested as a source format, the deliverables report marks it as missing.
+MIT. See [`LICENSE`](LICENSE).
